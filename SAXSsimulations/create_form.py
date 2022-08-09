@@ -18,6 +18,20 @@ class Simulation:
         """
         return int(self.box.sum())/self.nPoints**3
     
+    @property
+    def density(self):
+        """
+        Because the box might be changed at any moment density is the copy of it 
+        """
+        return self.box
+
+    @property
+    def FTI(self):
+        """
+        Set the Fourier transform variable to be the copy of the FT calulated the custom way
+        """
+        return self.FTI_custom
+
     def __initialize_box(self):
         """
         Creates a 1D gridding and expands it into a 3D box filled with voxels of size 'grid_space'.
@@ -29,7 +43,6 @@ class Simulation:
         self.__expand_Q()
         self.box  = torch.zeros((self.nPoints,self.nPoints,self.nPoints), dtype = torch.float32)
         self.grid_space = self.box_size/(self.nPoints-1)
-        self.density = self.box
     
     def __expand_Q(self):
         """
@@ -38,13 +51,13 @@ class Simulation:
 
         """
 
-        qx = torch.linspace(torch.pi/self.grid.min(), torch.pi/self.grid.max(), self.nPoints)
-        qy = qx.clone()
-        qz = qx.clone()
+        self.qx = torch.linspace(torch.pi/self.grid.min(), torch.pi/self.grid.max(), self.nPoints)
+        #qy = qx.clone()
+        #qz = qx.clone()
 
-        q3x = qx + 0 * qy[None,:,None] + 0 * qz[:,None,None]
-        q3y = 0 * qx + qy[None,:,None] + 0 * qz[:,None,None]
-        q3z = 0 * qx + 0 * qy[None,:,None] + qz[:,None,None]
+        q3x = self.qx + 0 * self.qx[None,:,None] + 0 * self.qx[:,None,None]
+        q3y = 0 * self.qx + self.qx[None,:,None] + 0 * self.qx[:,None,None]
+        q3z = 0 * self.qx + 0 * self.qx[None,:,None] + self.qx[:,None,None]
 
         self.Q = torch.sqrt(q3x**2 + q3y**2 + q3z**2)
 
@@ -69,25 +82,25 @@ class Simulation:
         """
         theta = np.random.uniform(low = 0, high = 90)
         phi = np.random.uniform(low = 0, high = 90)
-        radius_global = 0
-        height_global = 0
+        self.radius_global = 0
+        self.height_global = 0
         while self.volume_fraction<self.volume_fraction_threshold:
             success = False
             while success == False:
-                if height_global == 0:
+                if self.height_global == 0:
                     height = np.random.normal(loc = self.box_size*0.15, scale = self.box_size*0.5 )
                     radius = np.random.normal(loc = self.box_size*0.05, scale= self.box_size*0.1 )
                 else:
-                    height = np.random.normal(loc = height_global, scale= height_global*0.2 )
-                    radius = np.random.normal(loc = radius_global, scale= radius_global*0.1 )
+                    height = np.random.normal(loc = self.height_global, scale= self.height_global*0.2 )
+                    radius = np.random.normal(loc = self.radius_global, scale= self.radius_global*0.1 )
                 center = np.random.uniform(low = -self.box_size/2, high = self.box_size/2, size = 3)
                 if ((center >self.box_size/2)|(center<-self.box_size/2) == True).any() or (radius <0) or (height <0):
                     continue # center is outside of box or radius is bigger than one fitting the box
                 success = self.__generate_cylinder(radius, height, center, theta, phi)
                 if success:
-                    if height_global == 0: # set polydispersity arounf first created cylinder
-                        height_global = height
-                        radius_global = radius
+                    if self.height_global == 0: # set polydispersity arounf first created cylinder
+                        self.height_global = height
+                        self.radius_global = radius
                     print('volume fraction is {vf:.5f}, height is {h:.2f}, radius is {r:.2f}, center at ({cx:.1f},{cy:.1f},{cz:.1f}) '
                       .format(vf = self.volume_fraction, h = height, r = radius, cx=center[0], cy = center[1], cz = center[2]))
 
@@ -188,14 +201,14 @@ class Simulation:
         Radius is sampled from normal distribution. After the first placed sphere radius is sampled from a normal distribution 
         around the radius of the first one. Center is sampled from the uniform distribution.
         """
-        radius_global = 0
+        self.radius_global = 0
         while self.volume_fraction<self.volume_fraction_threshold:
             success = False
             while success == False:
-                if radius_global == 0:
+                if self.radius_global == 0:
                     radius = np.random.normal(loc = self.box_size*0.05, scale= self.box_size*0.1 )
                 else: 
-                    radius = np.random.normal(loc = radius_global, scale= radius_global*0.1 )
+                    radius = np.random.normal(loc = self.radius_global, scale= self.radius_global*0.1 )
                 # center is inside of the box minus the radius, s.t. the sphere fits inside the simulation box
                 center = np.random.uniform(low = -self.box_size/2 +radius, high = self.box_size/2-radius, size = 3)
                 if ((center >self.box_size/2)|(center<-self.box_size/2) == True).any() or (radius <0):
@@ -203,8 +216,8 @@ class Simulation:
                 self.__generate_sphere(radius, center)
                 success = True
                 if success:
-                    if radius_global == 0: # set polydispersity around first created sphere
-                        radius_global = radius
+                    if self.radius_global == 0: # set polydispersity around first created sphere
+                        self.radius_global = radius
                     print('volume fraction is {vf:.5f}, radius is {r:.2f}, center at ({cx:.1f},{cy:.1f},{cz:.1f}) '
                            .format(vf = self.volume_fraction, r = radius, cx=center[0], cy = center[1], cz = center[2]))
 
@@ -243,6 +256,8 @@ class Simulation:
                 circle_at_d2 = (x2x-center[1])**2 + (x2y-center[2])**2 < radius_at_d2**2
                 self.box[nearest_bigger_ind+i,circle_at_d1] = 1
                 self.box[nearest_bigger_ind-1-i,circle_at_d2] = 1
+
+                
     ################################   The Fourier Transformation functions   ################################
     def calculate_torch_FTI_3D(self, device = 'cuda'):
         """
@@ -269,10 +284,8 @@ class Simulation:
         density = torch.fft.fftshift(density)
         FTI = torch.abs(density)**2
         self.FTI_custom = FTI.cpu().detach().numpy()
-        self.FTI = self.FTI_custom
-   
-   def compute_error(d1, d2):   
-        return np.max(np.abs(d1-d2) / np.mean((np.abs(d1), np.abs(d2)), axis=0))
+    
+
     
     ################################   The rebinnning functions   ################################
     
