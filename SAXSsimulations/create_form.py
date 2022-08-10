@@ -61,12 +61,15 @@ class Simulation:
 
         self.Q = torch.sqrt(q3x**2 + q3y**2 + q3z**2)
 
-    def place_shape(self, shape):
+    def place_shape(self, shape, single = False, radius = None, center = None):
         self.shape = shape
         if self.shape == 'cylinder':
             self.__cylinder_in_box()
         elif self.shape == 'sphere':
-            self.__sphere_in_box()
+            if not single :
+                self.__sphere_in_box()
+            else:
+                self.__one_sphere_in_box(radius, center)
         else:
             raise  NotImplementedError('Other shapes are not supportd yet')
 
@@ -221,6 +224,33 @@ class Simulation:
                     print('volume fraction is {vf:.5f}, radius is {r:.2f}, center at ({cx:.1f},{cy:.1f},{cz:.1f}) '
                            .format(vf = self.volume_fraction, r = radius, cx=center[0], cy = center[1], cz = center[2]))
 
+
+    def __one_sphere_in_box(self, radius = None, center = None):
+        """
+        Given a box, fill it with sphere at apecified or random center and radius, sphere must fit into box, otherwise it's discarded until a fitting one is sampled.
+        Calls the generate_sphere function that creates sphere as slices.
+        Radius sampled from normal distribution, center from the uniform
+        input:
+            radius: a value for radius of the sphere
+            center: 3 values specifying the center of the sphere
+        """
+        success = False
+        while success == False:
+            # center is inside of the box minus the radius, s.t. the sphere fits inside the simulation box
+            if radius is None:
+                radius = np.random.normal(loc = self.box_size*0.05, scale= self.box_size*0.1 )
+            if center is None:
+                center = np.random.uniform(low = -self.box_size/2 +radius, high = self.box_size/2-radius, size = 3)
+            if ((center >self.box_size/2)|(center<-self.box_size/2) == True).any() or (radius <0):
+                continue # center is outside of box or radius is bigger than one fitting the box
+            box = self.__generate_sphere(radius, center)
+            success = True
+            if success:
+                self.radius_global = radius
+                vol_frac = 4/3*torch.pi*radius**3/self.box_size**3
+                print('volume fraction is {vf:.5f}, radius is {r:.3f}, center at ({cx:.1f},{cy:.1f},{cz:.1f})'.format(vf = vol_frac, r = radius, cx=center[0], cy = center[1], cz = center[2]))
+
+            
     def __generate_sphere(self, radius, center):
         """
         Create a 3D sphere as 2D slices. The slices are placed at the same distance to each other
