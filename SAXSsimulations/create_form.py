@@ -50,8 +50,8 @@ class Simulation:
         to 3D reciprocal(?) space to get the scattering angle Q in nm-1
 
         """
-
-        self.qx = torch.linspace(torch.pi/self.grid.min(), torch.pi/self.grid.max(), self.nPoints)
+        divLength = self.box_size/self.nPoints
+        self.qx = torch.linspace(-torch.pi/divLength, torch.pi/divLength, self.nPoints)
         #qy = qx.clone()
         #qz = qx.clone()
 
@@ -61,233 +61,7 @@ class Simulation:
 
         self.Q = torch.sqrt(q3x**2 + q3y**2 + q3z**2)
 
-    def place_shape(self, shape, single = False, radius = None, center = None):
-        self.shape = shape
-        if self.shape == 'cylinder':
-            self.__cylinder_in_box()
-        elif self.shape == 'sphere':
-            if not single :
-                self.__sphere_in_box()
-            else:
-                self.__one_sphere_in_box(radius, center)
-        else:
-            raise  NotImplementedError('Other shapes are not supportd yet')
 
-    def __cylinder_in_box(self):
-        """
-        Given a box, fills it with cylinder(s) at random center, radius and hight. 
-        Cylinder must fit into box, otherwise it is discarded until a fitting one is sampled.
-        Box might fit many cylinder if the volume fractuion is too small. 
-        Calls the generate_cylinder function that creates cylinders as slices.
-        Radius and Hight are sampled from normal distribution. After the first placed cylinder 
-        both variables are sampled from a normal distribution centered around the radius/hight of the first one.
-        Center is sampled from the uniform distribution
-        """
-        theta = np.random.uniform(low = 0, high = 90)
-        phi = np.random.uniform(low = 0, high = 90)
-        self.radius_global = 0
-        self.height_global = 0
-        while self.volume_fraction<self.volume_fraction_threshold:
-            success = False
-            while success == False:
-                if self.height_global == 0:
-                    height = np.random.normal(loc = self.box_size*0.15, scale = self.box_size*0.5 )
-                    radius = np.random.normal(loc = self.box_size*0.05, scale= self.box_size*0.1 )
-                else:
-                    height = np.random.normal(loc = self.height_global, scale= self.height_global*0.2 )
-                    radius = np.random.normal(loc = self.radius_global, scale= self.radius_global*0.1 )
-                center = np.random.uniform(low = -self.box_size/2, high = self.box_size/2, size = 3)
-                if ((center >self.box_size/2)|(center<-self.box_size/2) == True).any() or (radius <0) or (height <0):
-                    continue # center is outside of box or radius is bigger than one fitting the box
-                success = self.__generate_cylinder(radius, height, center, theta, phi)
-                if success:
-                    if self.height_global == 0: # set polydispersity arounf first created cylinder
-                        self.height_global = height
-                        self.radius_global = radius
-                    print('volume fraction is {vf:.5f}, height is {h:.2f}, radius is {r:.2f}, center at ({cx:.1f},{cy:.1f},{cz:.1f}) '
-                      .format(vf = self.volume_fraction, h = height, r = radius, cx=center[0], cy = center[1], cz = center[2]))
-
-            
-
-    def __generate_cylinder(self, radius, height, center, theta, phi):
-        """
-        Create a 3D cylinder as 2D slices. The slices are placed at the same distance to each other 
-        as the grid inside the slices.
-        input:
-            radius: the radius of cylinder in nm
-            center: triple that points to the center of the cylinder
-            height: the hight of the cylinder, height/2 when counting from the center
-            theta: angle in xy-plane
-            phi: angle in xz-plane
-        output:
-            boolean: True if a cylinder was  placed in a box, otherwise, if constraints were not met returns False
-        """
-
-        #working on slices: slice through x
-        x2y = self.grid[None,:]
-        x2z = self.grid[:,None]
-        cylinder_projection_on_x = int(height/2//self.grid_space*np.sin(np.deg2rad(theta))*np.sin(np.deg2rad(phi))) #in one direction
-        radius_at_slice = np.cos(np.deg2rad(theta))*radius* np.cos(np.deg2rad(phi)) # calculate the radius of circle at slice at both rotations
-
-        # if central slice on grid:
-        if len(self.grid[self.grid == center[0]])==1:
-            central_slice = torch.argwhere(self.grid==center[0])[0,0] # start with the central slice
-            if central_slice+cylinder_projection_on_x >self.box.shape[0] or central_slice-cylinder_projection_on_x <0:
-                print('--->outside of x plane')
-                return False
-            # check if circles at the ends of cylinder are inside the box  
-            d = self.grid_space*cylinder_projection_on_x
-            c_y_1 = center[1] + d*np.tan(np.deg2rad(theta)) # because of the theta rotation the y-coordinate of center at fixed x  slice shifts
-            c_y_2 = center[1] - d*np.tan(np.deg2rad(theta)) 
-            c_z_1 = center[2] + d*np.tan(np.deg2rad(phi)) # because of phi rotation the z-coordinate of center at fixed x shifts
-            c_z_2 = center[2] - d*np.tan(np.deg2rad(phi)) 
-            circle_1 = (x2y-c_y_1)**2 + (x2z-c_z_1)**2 < radius_at_slice**2 # mask the circle location
-            circle_2 = (x2y-c_y_2)**2 + (x2z-c_z_2)**2 < radius_at_slice**2             
-
-            if (circle_1[0,:] == True).any() or (circle_1[-1,:] == True).any() or (circle_1[:,0] == True).any() or (circle_1[:, -1] == True).any() or (circle_2[0,:] == True).any() or (circle_2[-1,:] == True).any() or (circle_2[:,0] == True).any() or (circle_2[:, -1] == True).any():
-                print('--->outside on yz-plane')
-                return  False
-            # all checks done, cylinder fits the box, fill the densities by slices
-            for i in range(cylinder_projection_on_x): # last grid point fully covering the radius is considered , cylinder is symmetric so work in both directions
-                d = self.grid_space*i # calculate the distance grom the center to the slice
-                c_y_1 = center[1] + d*np.tan(np.deg2rad(theta)) 
-                c_y_2 = center[1] - d*np.tan(np.deg2rad(theta)) 
-                c_z_1 = center[2] + d*np.tan(np.deg2rad(phi)) 
-                c_z_2 = center[2] - d*np.tan(np.deg2rad(phi)) 
-
-                circle_1 = (x2y-c_y_1)**2 + (x2z-c_z_1)**2 < radius_at_slice**2
-                circle_2 = (x2y-c_y_2)**2 + (x2z-c_z_2)**2 < radius_at_slice**2 
-
-                self.box[central_slice+i,circle_1] = 1 # density inside cylinder
-                self.box[central_slice-i,circle_2] = 1
-        else:
-            # if the center of the cylinder in between of two grid points, find those points and do the same in both dierections
-            nearest_bigger_ind = torch.argwhere(self.grid>center[0])[0,0]
-            if nearest_bigger_ind+cylinder_projection_on_x >self.box.shape[0] or nearest_bigger_ind-1-cylinder_projection_on_x <0:
-                print('--->outside of x plane')
-                return  False
-            # check if circles at the ends of cylinder are inside the box  
-            d = self.grid_space*cylinder_projection_on_x
-            c_y_1 = center[1] + d*np.tan(np.deg2rad(theta)) # because of the theta rotation the y-coordinate of center at fixed x  slice shifts
-            c_y_2 = center[1] - d*np.tan(np.deg2rad(theta)) 
-            c_z_1 = center[2] + d*np.tan(np.deg2rad(phi)) # because of phi rotation the z-coordinate of center at fixed x shifts
-            c_z_2 = center[2] - d*np.tan(np.deg2rad(phi)) 
-            circle_1 = (x2y-c_y_1)**2 + (x2z-c_z_1)**2 < radius_at_slice**2 # mask the circle location
-            circle_2 = (x2y-c_y_2)**2 + (x2z-c_z_2)**2 < radius_at_slice**2             
-
-            if (circle_1[0,:] == True).any() or (circle_1[-1,:] == True).any() or (circle_1[:,0] == True).any() or (circle_1[:, -1] == True).any() or (circle_2[0,:] == True).any() or (circle_2[-1,:] == True).any() or (circle_2[:,0] == True).any() or (circle_2[:, -1] == True).any():
-                print('--->outside on yz-plane')
-                return False
-            # all checks done, cylinder fitsd the box, fill the densities by slices
-            for i in range(cylinder_projection_on_x):
-                d1 = self.grid_space*i + center[0] - self.grid[nearest_bigger_ind-1]
-                d2 = self.grid_space*i + self.grid[nearest_bigger_ind]-center[0]
-
-                c_y_1 = center[1] + d1*np.tan(np.deg2rad(theta)) 
-                c_y_2 = center[1] - d2*np.tan(np.deg2rad(theta)) 
-                c_z_1 = center[2] + d1*np.tan(np.deg2rad(phi)) 
-                c_z_2 = center[2] - d2*np.tan(np.deg2rad(phi)) 
-
-                circle_at_d1 = (x2y-c_y_1)**2 + (x2z-c_z_1)**2 < radius_at_slice**2
-                circle_at_d2 = (x2y-c_y_2)**2 + (x2z-c_z_2)**2 < radius_at_slice**2
-
-                self.box[nearest_bigger_ind+i,circle_at_d1] = 1
-                self.box[nearest_bigger_ind-1-i,circle_at_d2] = 1
-        return True
-
-    def __sphere_in_box(self):
-        """
-        Given a box fill it with sphere(s) at random center and radius.
-        Sphere must fit into box, otherwise it's discarded until a fitting one is sampled.
-        Box might fit many spheres if the volume fractuion is too small. 
-        Calls the generate_sphere function that creates spheres as slices.
-        Radius is sampled from normal distribution. After the first placed sphere radius is sampled from a normal distribution 
-        around the radius of the first one. Center is sampled from the uniform distribution.
-        """
-        self.radius_global = 0
-        while self.volume_fraction<self.volume_fraction_threshold:
-            success = False
-            while success == False:
-                if self.radius_global == 0:
-                    radius = np.random.normal(loc = self.box_size*0.05, scale= self.box_size*0.1 )
-                else: 
-                    radius = np.random.normal(loc = self.radius_global, scale= self.radius_global*0.1 )
-                # center is inside of the box minus the radius, s.t. the sphere fits inside the simulation box
-                center = np.random.uniform(low = -self.box_size/2 +radius, high = self.box_size/2-radius, size = 3)
-                if ((center >self.box_size/2)|(center<-self.box_size/2) == True).any() or (radius <0):
-                    continue # center is outside of box or radius is bigger than one fitting the box
-                self.__generate_sphere(radius, center)
-                success = True
-                if success:
-                    if self.radius_global == 0: # set polydispersity around first created sphere
-                        self.radius_global = radius
-                    print('volume fraction is {vf:.5f}, radius is {r:.2f}, center at ({cx:.1f},{cy:.1f},{cz:.1f}) '
-                           .format(vf = self.volume_fraction, r = radius, cx=center[0], cy = center[1], cz = center[2]))
-
-
-    def __one_sphere_in_box(self, radius = None, center = None):
-        """
-        Given a box, fill it with sphere at apecified or random center and radius, sphere must fit into box, otherwise it's discarded until a fitting one is sampled.
-        Calls the generate_sphere function that creates sphere as slices.
-        Radius sampled from normal distribution, center from the uniform
-        input:
-            radius: a value for radius of the sphere
-            center: 3 values specifying the center of the sphere
-        """
-        success = False
-        while success == False:
-            # center is inside of the box minus the radius, s.t. the sphere fits inside the simulation box
-            if radius is None:
-                radius = np.random.normal(loc = self.box_size*0.05, scale= self.box_size*0.1 )
-            if center is None:
-                center = np.random.uniform(low = -self.box_size/2 +radius, high = self.box_size/2-radius, size = 3)
-            if ((center >self.box_size/2)|(center<-self.box_size/2) == True).any() or (radius <0):
-                continue # center is outside of box or radius is bigger than one fitting the box
-            box = self.__generate_sphere(radius, center)
-            success = True
-            if success:
-                self.radius_global = radius
-                vol_frac = 4/3*torch.pi*radius**3/self.box_size**3
-                print('volume fraction is {vf:.5f}, radius is {r:.3f}, center at ({cx:.1f},{cy:.1f},{cz:.1f})'.format(vf = vol_frac, r = radius, cx=center[0], cy = center[1], cz = center[2]))
-
-            
-    def __generate_sphere(self, radius, center):
-        """
-        Create a 3D sphere as 2D slices. The slices are placed at the same distance to each other
-        as the grid inside the slices.
-        input:
-            radius: the radius of sphere in nm
-            center: triple that points to the center of the sphere
-        output:
-            box: box with a new sphere
-        """
-
-        #working on slices: slice through x
-        x2x = self.grid[None,:]
-        x2y = self.grid[:,None]
-        # if central slice on grid:
-        if len(self.grid[self.grid == center[0]])==1:
-            central_slice = torch.argwhere(self.grid==center[0])[0,0] # start with the central slice
-            for i in range(int(radius//self.grid_space)): # last grid point fully covering the radius is considered , sphere is symmetric so work in both directions
-                d = self.grid_space*i # calculate the distance grom the center to the slice
-                radius_at_d = torch.sqrt(radius**2-d**2) # calculate the radius of circle at slice using Pythagoras Theorem
-                circle_at_d = (x2x-center[1])**2 + (x2y-center[2])**2 < radius_at_d**2 # mask the circle location
-                self.box[central_slice+i,circle_at_d] = 1 # density inside sphere
-                self.box[central_slice-i,circle_at_d] = 1
-        else:
-            # if the center of the sphere in between of two grid points, find those points and do the same in both dierections
-            nearest_bigger_ind = torch.argwhere(self.grid>center[0])[0,0]
-            for i in range(int(radius//self.grid_space)): # last grid point fully covering the radius is considered  
-                d1 = self.grid_space*i + center[0] - self.grid[nearest_bigger_ind-1]
-                d2 = self.grid_space*i + self.grid[nearest_bigger_ind]-center[0]
-                radius_at_d1 = torch.sqrt(radius**2-d1**2)
-                radius_at_d2 = torch.sqrt(radius**2-d2**2)
-                circle_at_d1 = (x2x-center[1])**2 + (x2y-center[2])**2 < radius_at_d1**2
-                circle_at_d2 = (x2x-center[1])**2 + (x2y-center[2])**2 < radius_at_d2**2
-                self.box[nearest_bigger_ind+i,circle_at_d1] = 1
-                self.box[nearest_bigger_ind-1-i,circle_at_d2] = 1
-
-                
     ################################   The Fourier Transformation functions   ################################
     def calculate_torch_FTI_3D(self, device = 'cuda'):
         """
@@ -314,8 +88,14 @@ class Simulation:
         density = torch.fft.fftshift(density)
         FTI = torch.abs(density)**2
         self.FTI_custom = FTI.cpu().detach().numpy()
-    
-
+        
+    def sinc(self):
+        """
+        Applies the sinc function to the voxel and multiplies the result with the Fourier Transformed Structure. New attribute is 
+        created as a convolution of sinc'ed voxel with the Fourier Transform of the structure
+        """
+        q_lengthbox = float(self.Q[0,0,0])-float(self.Q[0,0,1])
+        self.FTI_sinc = self.FTI*np.sinc(q_lengthbox)
     
     ################################   The rebinnning functions   ################################
     
@@ -420,10 +200,10 @@ class Simulation:
         binEdges[-1] = binEdges[-1] + 1e-3 * (binEdges[-1] - binEdges[-2])
         # accumulate bins of slices in a new Data Frame
         binned_slices = pd.DataFrame()
-        for nSlice in range(self.FTI.shape[0]):
+        for nSlice in range(self.FTI_sinc.shape[0]):
             df = pd.DataFrame({'Q':self.Q[nSlice,:,:].flatten(), 
-                               'I':self.FTI[nSlice,:,:].flatten(), 
-                               'ISigma':0.01 * self.FTI[nSlice,:,:].flatten()})
+                               'I':self.FTI_sinc[nSlice,:,:].flatten(), 
+                               'ISigma':0.01 * self.FTI_sinc[nSlice,:,:].flatten()})
             binned_slices = pd.concat([binned_slices, self.__reBinSlice(df, binEdges, IEMin=0.01, QEMin=0.01)], axis=0) 
 
         # another aggregation round, now group by index, which represents bins already 
@@ -442,4 +222,8 @@ class Simulation:
         self.binned_data['QSigma'] = self.binned_data.apply(lambda x: self.__determine_QSigma(x, QEMin), axis = 1) 
         self.binned_data.dropna(thresh=4, inplace=True) # empty rows appear because of groupping by index in accumulated data, which in turn consisted of binEdges, which are sometimes empty
 
-
+    def drop_first_bin(self):
+        """
+        Drops first bin in the rebinned data frime, because it's not needed for our purposes and has way too small scattering angle Q compared to the rest of bins
+        """
+        self.binned_data = self.binned_data.iloc[1:]

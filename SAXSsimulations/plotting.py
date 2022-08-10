@@ -65,7 +65,6 @@ def plot_FTI_version(custom_version, torch_version, qx, slice_number = None, fil
     if not slice_number:
         slice_number = np.random.randint(low = 0, high = custom_version.shape[0])
     
-    print(slice_number)
     fig,axs = plt.subplots(1,2,figsize = (20,10))
     ax = axs[0]
     im = ax.imshow(np.log(custom_version[slice_number,:,:]), cmap = 'Greys', vmin = 0, vmax = 20, extent = [qx.min(), qx.max(), qx.min(), qx.max()])
