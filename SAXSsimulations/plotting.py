@@ -5,17 +5,22 @@ import numpy as np
 from SAXSsimulations.utils import compute_error
 
 
-def plot_slices(density,grid, file = None, file_format = None):
+def plot_slices(density,grid, direction  = 'x', file = None, file_format = None):
     nPoints = density.shape[0]
     fig,axs = plt.subplots(1,5,figsize = (20,10))
     
     for i, sl in enumerate([1,3,5,7,9]):
         ax = axs[i]
-        im = ax.imshow(density[nPoints//10*sl,:,:], extent = [np.round(float(grid.min()),2), np.round(float(grid.max()),2),np.round(float(grid.min()),2), np.round(float(grid.max()),2)])
+        if direction == 'x':
+            im = ax.imshow(density[nPoints//10*sl,:,:], extent = [np.round(float(grid.min()),2), np.round(float(grid.max()),2),np.round(float(grid.min()),2), np.round(float(grid.max()),2)])
+        elif direction =='y':
+            im = ax.imshow(density[:,nPoints//10*sl,:], extent = [np.round(float(grid.min()),2), np.round(float(grid.max()),2),np.round(float(grid.min()),2), np.round(float(grid.max()),2)])
+        else:
+            im = ax.imshow(density[:,:,nPoints//10*sl], extent = [np.round(float(grid.min()),2), np.round(float(grid.max()),2),np.round(float(grid.min()),2), np.round(float(grid.max()),2)])
         ax.set_title('slice {s}'.format(s = int(nPoints//10*sl)))
     plt.tight_layout()
     if file:
-        if not file_format:
+        if file_format is None:
             file_format = 'png'
         plt.savefig(file, format = file_format)
     else:
@@ -51,7 +56,7 @@ def plot_3D_structure(entity, grid, realspace = True, file = None, file_format =
     ax.set_ylim(0,nPoints)
     ax.set_zlim(0,nPoints)
     if file:
-        if not file_format:
+        if file_format is None:
             file_format = 'png'
         plt.savefig(file, format = file_format)
     else:
@@ -74,7 +79,7 @@ def plot_FTI_version(custom_version, torch_version, qx, slice_number = None, fil
     ax.set_title('fftn')
     plt.colorbar(im, ax = axs.ravel().tolist(), shrink=0.8, location = 'left')
     if file:
-        if not file_format:
+        if file_format is None:
             file_format = 'png'
             print(slice_number)
         plt.savefig(file, format = file_format)
@@ -84,18 +89,22 @@ def plot_FTI_version(custom_version, torch_version, qx, slice_number = None, fil
     
     
 def plot_Q_vs_I(binned_data,xlim = None, file = None, file_format = None):
-    plt.figure(figsize=(8,3))
-    plt.plot(binned_data.Q, binned_data.I)
-    plt.xscale('log')
-    plt.yscale('log')
-    plt.xlabel('q')
-    plt.ylabel('I')
-    plt.title("rebinned Q vs I");
+    binned_data.plot('Q', 'I', yerr = 'IError', 
+            figsize=(6,6),logx = True, logy = True, xlabel = 'q', ylabel = 'I', title = 'rebinned Q vs I')
     if xlim:
         plt.xlim(xlim[0], xlim[1]) # e.g. (10**(-2), 10**(-1))
     if file:
-        if not file_format:
+        if file_format is None:
             file_format = 'png'
         plt.savefig(file, format = file_format)
     else:
         plt.show()
+
+def plot_simulation_vs_sas( binned_data, sas_q, sas_intensity):
+    plt.plot(sas_q, sas_intensity, '-', color = 'red', label = 'SasView')
+    plt.plot(binned_data.Q, binned_data.I, color = 'blue', label = 'Simulation')
+    plt.xlabel("q (1/nm)")
+    plt.ylabel("I (1/(cm sr))")
+    plt.xscale('log') 
+    plt.yscale('log') 
+    plt.legend()

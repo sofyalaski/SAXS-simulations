@@ -9,6 +9,7 @@ class Sphere(Simulation):
         self.rWidth = None
         self.rMean = None
         self.center = None  
+        self.shape = 'sphere'
 
     def place_shape(self, single = False, **kwargs):
         """

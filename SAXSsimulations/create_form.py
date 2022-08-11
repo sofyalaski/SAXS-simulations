@@ -2,6 +2,10 @@ import numpy as np
 import pandas as pd
 import torch
 
+import sasmodels
+import sasmodels.core as core
+import sasmodels.direct_model as direct_model
+
 
 class Simulation:
     def __init__(self, size, nPoints, volFrac = 0.05):
@@ -227,3 +231,55 @@ class Simulation:
         Drops first bin in the rebinned data frime, because it's not needed for our purposes and has way too small scattering angle Q compared to the rest of bins
         """
         self.binned_data = self.binned_data.iloc[1:]
+
+
+
+    ################################   The SasModels functions   ################################
+
+    def __init_sas_model(self):
+        try:
+            self.model = sasmodels.core.load_model(self.shape)
+
+        except AttributeError:
+            print("First create a manual simultion!")
+        
+        #q = np.geomspace(float(self.binned_data['Q'].min()), float(self.binned_data['Q'].max()), 501)
+        self.qx_sas = self.binned_data['Q'].values
+        self.Q_sas = np.array(self.qx_sas[np.newaxis, :])
+        self.modelParameters_sas = self.model.info.parameters.defaults.copy()
+        if self.shape == 'sphere':
+            self.modelParameters_sas.update({
+                'radius': self.rMean, 
+                'background':0., 
+                'sld':1.,
+                'sld_solvent':0.,
+                'radius_pd': self.rWidth, 
+                'radius_pd_type': 'gaussian', 
+                'radius_pd_n': 35
+                })
+        elif self.shape =='cylinder':
+            self.modelParameters_sas.update({
+                'radius': self.rMean, 
+                'background':0., 
+                'sld':1.,
+                'sld_solvent':0.,
+                'radius_pd': self.rWidth, 
+                'radius_pd_type': 'gaussian', 
+                'radius_pd_n': 35, 
+                'length': self.hMean, 
+                'length_pd': self.hWidth, 
+                'length_pd_type': 'gaussian', 
+                'length_pd_n': 35, 
+                'theta': self.theta,
+                'phi': self.phi
+                })
+        self.__create_sas_model()
+                
+    def __create_sas_model(self):
+        self.kernel=self.model.make_kernel(self.Q_sas)
+        self.I_sas = sasmodels.direct_model.call_kernel(self.kernel, self.modelParameters_sas)
+
+    def update_scaling(self, value):
+        self.modelParameters_sas.update({'scale':value})
+        self.__create_sas_model()
+    
