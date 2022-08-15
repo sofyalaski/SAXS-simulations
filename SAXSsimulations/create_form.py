@@ -72,7 +72,7 @@ class Simulation:
         Calculates Fourier transform of a 3D box with torch fftn and shifts to nyquist frequency
         """
         density = self.density.type(torch.complex64).to(device)
-        FT = torch.fft.fftn(density)
+        FT = torch.fft.fftn(density, norm = 'forward')
         FT = torch.fft.fftshift(FT)
         FTI = torch.abs(FT)**2
         self.FTI_torch = FTI.cpu().detach().numpy()
@@ -84,10 +84,10 @@ class Simulation:
         density = self.density.type(torch.complex64).to(device)
         for k in range(density.shape[0]):
             if density[k,:,:].any():
-                density[k,:,:] = torch.fft.fft2(density[k,:,:])
+                density[k,:,:] = torch.fft.fft2(density[k,:,:], norm = 'forward')
         for i in range(density.shape[1]):
             for j in range(density.shape[2]):                
-                density[:,i,j] = torch.fft.fft(density[:,i,j])
+                density[:,i,j] = torch.fft.fft(density[:,i,j], norm = 'forward')
 
         density = torch.fft.fftshift(density)
         FTI = torch.abs(density)**2
@@ -236,7 +236,7 @@ class Simulation:
 
     ################################   The SasModels functions   ################################
 
-    def __init_sas_model(self):
+    def init_sas_model(self):
         try:
             self.model = sasmodels.core.load_model(self.shape)
 

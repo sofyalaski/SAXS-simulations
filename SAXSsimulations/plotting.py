@@ -5,7 +5,7 @@ import numpy as np
 from SAXSsimulations.utils import compute_error
 
 
-def plot_slices(density,grid, direction  = 'x', file = None, file_format = None):
+def plot_slices(density,grid, direction  = 'x', path = None):
     nPoints = density.shape[0]
     fig,axs = plt.subplots(1,5,figsize = (20,10))
     
@@ -19,15 +19,14 @@ def plot_slices(density,grid, direction  = 'x', file = None, file_format = None)
             im = ax.imshow(density[:,:,nPoints//10*sl], extent = [np.round(float(grid.min()),2), np.round(float(grid.max()),2),np.round(float(grid.min()),2), np.round(float(grid.max()),2)])
         ax.set_title('slice {s}'.format(s = int(nPoints//10*sl)))
     plt.tight_layout()
-    if file:
-        if file_format is None:
-            file_format = 'png'
-        plt.savefig(file, format = file_format)
+    if path:
+        plt.savefig(path)
+        plt.close()
     else:
         plt.suptitle('Realspace density')
         plt.show()
     
-def plot_3D_structure(entity, grid, realspace = True, file = None, file_format = None):
+def plot_3D_structure(entity, grid, realspace = True, path = None):
     nPoints = entity.shape[0]
     fig = plt.figure(figsize = (10,10))
     ax = plt.axes(projection ='3d')
@@ -35,7 +34,7 @@ def plot_3D_structure(entity, grid, realspace = True, file = None, file_format =
     xx, yy, zz = values[:,0],values[:,1],values[:,2]
     img = ax.scatter3D(xx, yy, zz, zdir='z', c= entity[xx,yy,zz],  cmap="coolwarm" if realspace else 'Greys', s = 2, marker = 'o')
     ticks = np.linspace(0,nPoints,11)
-    labels = np.round(np.linspace(grid.min(), grid.max(),11),2)  #labels = np.linspace(self.q3x.numpy().min(), self.q3x.numpy().max(),11)
+    labels = np.round(np.linspace(grid.min(), grid.max(),11)).astype('int')  #labels = np.linspace(self.q3x.numpy().min(), self.q3x.numpy().max(),11)
     if realspace:
         img = ax.scatter3D(xx, yy, zz, zdir='z', c= entity[xx,yy,zz],  cmap="coolwarm" , s = 2, marker = 'o')
         ax.set_xlabel('nm')
@@ -55,15 +54,14 @@ def plot_3D_structure(entity, grid, realspace = True, file = None, file_format =
     ax.set_xlim(0,nPoints)
     ax.set_ylim(0,nPoints)
     ax.set_zlim(0,nPoints)
-    if file:
-        if file_format is None:
-            file_format = 'png'
-        plt.savefig(file, format = file_format)
+    if path:
+        plt.savefig(path)
+        plt.close()
     else:
         plt.title(title)# only set title when not saving a file
         plt.show()
-    
-def plot_FTI_version(custom_version, torch_version, qx, slice_number = None, file = None, file_format = None):
+
+def plot_FTI_version(custom_version, torch_version, qx, slice_number = None, path = None):
     # just another round to compare
     difference = compute_error(custom_version,torch_version)
     print('the maximal difference between the implementation of the FTI is {}'.format(difference.max()))
@@ -72,33 +70,31 @@ def plot_FTI_version(custom_version, torch_version, qx, slice_number = None, fil
     
     fig,axs = plt.subplots(1,2,figsize = (20,10))
     ax = axs[0]
-    im = ax.imshow(np.log(custom_version[slice_number,:,:]), cmap = 'Greys', vmin = 0, vmax = 20, extent = [qx.min(), qx.max(), qx.min(), qx.max()])
+    im = ax.imshow(np.log(custom_version[slice_number,:,:]), cmap = 'Greys',  extent = [qx.min(), qx.max(), qx.min(), qx.max()])
     ax.set_title('custom fft ')
     ax = axs[1]
-    im = ax.imshow(np.log(torch_version[slice_number,:,:]), cmap = 'Greys', vmin = 0, vmax = 20,  extent = [qx.min(), qx.max(), qx.min(), qx.max()])
+    im = ax.imshow(np.log(torch_version[slice_number,:,:]), cmap = 'Greys',  extent = [qx.min(), qx.max(), qx.min(), qx.max()])
     ax.set_title('fftn')
     plt.colorbar(im, ax = axs.ravel().tolist(), shrink=0.8, location = 'left')
-    if file:
-        if file_format is None:
-            file_format = 'png'
-            print(slice_number)
-        plt.savefig(file, format = file_format)
+    if path:
+        plt.savefig(path)
+        plt.close()
     else:
         plt.suptitle("Comparison of the Fourier Transforms at slice {sl} calculated a custom way\nby 2D slices + final 1D FT and the torch's fftn".format(sl = slice_number))
         plt.show()
     
     
-def plot_Q_vs_I(binned_data,xlim = None, file = None, file_format = None):
+def plot_Q_vs_I(binned_data,xlim = None, path = None):
     binned_data.plot('Q', 'I', yerr = 'IError', 
             figsize=(6,6),logx = True, logy = True, xlabel = 'q', ylabel = 'I', title = 'rebinned Q vs I')
     if xlim:
         plt.xlim(xlim[0], xlim[1]) # e.g. (10**(-2), 10**(-1))
-    if file:
-        if file_format is None:
-            file_format = 'png'
-        plt.savefig(file, format = file_format)
+    if path:
+        plt.savefig(path)
+        plt.close()
     else:
         plt.show()
+    
 
 def plot_simulation_vs_sas( binned_data, sas_q, sas_intensity):
     plt.plot(sas_q, sas_intensity, '-', color = 'red', label = 'SasView')
