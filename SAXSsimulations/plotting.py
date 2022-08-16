@@ -82,7 +82,27 @@ def plot_FTI_version(custom_version, torch_version, qx, slice_number = None, pat
     else:
         plt.suptitle("Comparison of the Fourier Transforms at slice {sl} calculated a custom way\nby 2D slices + final 1D FT and the torch's fftn".format(sl = slice_number))
         plt.show()
-    
+
+
+def plot_FTI_version_center(custom_version, torch_version, qx,  path = None):
+    # just another round to compare
+    difference = compute_error(custom_version,torch_version)
+    print('the maximal difference between the implementation of the FTI is {}'.format(difference.max()))
+
+    fig,axs = plt.subplots(1,2,figsize = (20,10))
+    ax = axs[0]
+    im = ax.imshow(np.log(custom_version), cmap = 'Greys',  extent = [qx.min(), qx.max(), qx.min(), qx.max()])
+    ax.set_title('custom fft ')
+    ax = axs[1]
+    im = ax.imshow(np.log(torch_version), cmap = 'Greys',  extent = [qx.min(), qx.max(), qx.min(), qx.max()])
+    ax.set_title('fftn')
+    plt.colorbar(im, ax = axs.ravel().tolist(), shrink=0.8, location = 'left')
+    if path:
+        plt.savefig(path)
+        plt.close()
+    else:
+        plt.suptitle("Comparison of the Fourier Transforms at central slice calculated a custom way\nby 2D slices + final 1D FT and the torch's fftn")
+        plt.show()   
     
 def plot_Q_vs_I(binned_data,xlim = None, path = None):
     binned_data.plot('Q', 'I', yerr = 'IError', 

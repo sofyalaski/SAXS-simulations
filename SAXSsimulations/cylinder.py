@@ -174,14 +174,19 @@ class Cylinder(Simulation):
 
     def save_data(self,  directory='.', for_SasView = True):
         """
-        saves .dat file
+        Saves .dat file. If slice  of 3D Fourier Transform was created only, operates on that slice, otherwise on whole data.
         input:
             directory to save
-            for_SasView: boolean, if True converts Q and I to SASView compartible values: Armstrong^-1 for Q and (m*sr)^-1
+            for_SasView: boolean, if True converts Q and I to SASView compartible values: Armstrong^-1 for Q and (m*sr)^-1.
         """
+        if 'binned_slice' in dir(self):
+            data = self.binned_slice
+        else:
+            data = self.binned_data
+
         if for_SasView:
-            self.binned_data.assign(Q = self.binned_data.Q/10, I = self.binned_data.I/100, ISigma = self.binned_data.ISigma/100).to_csv(directory+'/polydispersed_cylinders_{r}_{h}.dat'.
+            data.assign(Q = data.Q/10, I = data.I/100, ISigma = data.ISigma/100).to_csv(directory+'/polydispersed_cylinders_{r}_{h}.dat'.
             format(r = int(self.rMean*1000), h = int(self.hMean*1000)), header=None, index=None, columns=["Q", "I", "ISigma"])
         else:
-            self.binned_data.to_csv(directory+'/polydispersed_cylinders_{r}_{h}.dat'.
+            data.to_csv(directory+'/polydispersed_cylinders_{r}_{h}.dat'.
             format(r = int(self.rMean*1000), h = int(self.hMean*1000)), header=None, index=None, columns=["Q", "I", "ISigma"])

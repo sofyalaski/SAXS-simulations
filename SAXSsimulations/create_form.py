@@ -67,31 +67,57 @@ class Simulation:
 
 
     ################################   The Fourier Transformation functions   ################################
-    def calculate_torch_FTI_3D(self, device = 'cuda'):
+    def calculate_torch_FTI_3D(self, device = 'cuda', slice = None):
         """
         Calculates Fourier transform of a 3D box with torch fftn and shifts to nyquist frequency
+        input:
+            device: to use the GPU
+            slice: if None, the central slice will be assigned to the attribute FTI_slice_torch
         """
         density = self.density.type(torch.complex64).to(device)
         FT = torch.fft.fftn(density, norm = 'forward')
         FT = torch.fft.fftshift(FT)
         FTI = torch.abs(FT)**2
         self.FTI_torch = FTI.cpu().detach().numpy()
+        if slice is None:
+            slice = self.nPoints//2+1
+        self.FTI_slice_torch = self.FTI_torch[slice,:,:]
     
     def calculate_custom_FTI_3D(self, device = 'cuda'):
         """
         calculate the 3D FFT via 2D FFT and then the last 1D FFT
         """
-        density = self.density.type(torch.complex64).to(device)
-        for k in range(density.shape[0]):
-            if density[k,:,:].any():
-                density[k,:,:] = torch.fft.fft2(density[k,:,:], norm = 'forward')
-        for i in range(density.shape[1]):
-            for j in range(density.shape[2]):                
-                density[:,i,j] = torch.fft.fft(density[:,i,j], norm = 'forward')
+        FT = self.density.type(torch.complex64).to(device)
+        for k in range(FT.shape[0]):
+            if FT[k,:,:].any():
+                FT[k,:,:] = torch.fft.fft2(FT[k,:,:], norm = 'forward')
+        for i in range(FT.shape[1]):
+            for j in range(FT.shape[2]):                
+                FT[:,i,j] = torch.fft.fft(FT[:,i,j], norm = 'forward')
 
-        density = torch.fft.fftshift(density)
-        FTI = torch.abs(density)**2
+        FT = torch.fft.fftshift(FT)
+        FTI = torch.abs(FT)**2
         self.FTI_custom = FTI.cpu().detach().numpy()
+
+    def calculate_custom_FTI_3D_slice(self, device = 'cuda', slice = None):
+        """
+        calculate the 3D FFT AT CERTAIN SLICE via 2D FFT and then the last 1D FFT
+        input:
+            device: to use the GPU
+            slice: if None, the central will be returned
+        """
+        if slice is None:
+            slice = self.nPoints//2+1
+        FT = self.density.type(torch.complex64).to(device)
+        for i in range(FT.shape[1]):
+            for j in range(FT.shape[2]):      
+                if FT[:,i,j].any():          
+                    FT[:,i,j] = torch.fft.fft(FT[:,i,j], norm = 'forward')
+        FT = torch.fft.fftshift(FT) # shifts in 1 direction 
+        FT_slice = torch.fft.fft2(FT[slice,:,:], norm = 'forward') # ft2 at slice
+        FT_slice = torch.fft.fftshift(FT_slice) # shift the slice
+        FTI = torch.abs(FT_slice)**2
+        self.FTI_slice_custom = FTI.cpu().detach().numpy()
         
     def sinc(self):
         """
@@ -99,7 +125,7 @@ class Simulation:
         created as a convolution of sinc'ed voxel with the Fourier Transform of the structure
         """
         q_lengthbox = float(self.Q[0,0,0])-float(self.Q[0,0,1])
-        self.FTI_sinc = self.FTI*np.sinc(q_lengthbox)
+        self.FTI_sinc = self.FTI*np.sinc(q_lengthbox/np.pi)
     
     ################################   The rebinnning functions   ################################
     
@@ -179,7 +205,7 @@ class Simulation:
         binned_data.dropna(thresh=4, inplace=True)
         return binned_data[['Q', 'I', 'IStd', 'ISEM', 'IError', 'ISigma', 'QStd', 'QSEM', 'QSigma']]
 
-    def reBin(self, nbins, IEMin=0.01, QEMin=0.01):
+    def reBin(self, nbins, IEMin=0.01, QEMin=0.01, slice = 'center'):
         """
         Unweighted rebinning funcionality with extended uncertainty estimation, adapted from the datamerge methods,
         as implemented in Paulina's notebook of spring 2020.
@@ -190,6 +216,7 @@ class Simulation:
             nbins: how many bins shoould there be in a new data
             IEMin: coefficent used to determine ISigma
             QEMin: coefficent used to determine QSigma
+            slice: if 'center' the central slice computed, if other integer, the slice at the integer is computed otherwise the 3D version is computed, 
         output:
             binned_data: pandas.DataFrame with the values of intensity I and scattering angle Q rebinned 
             in specified intervals and other calculated statistics on it
@@ -202,35 +229,50 @@ class Simulation:
 
         # add a little to the end to ensure the last datapoint is captured:
         binEdges[-1] = binEdges[-1] + 1e-3 * (binEdges[-1] - binEdges[-2])
-        # accumulate bins of slices in a new Data Frame
-        binned_slices = pd.DataFrame()
-        for nSlice in range(self.FTI_sinc.shape[0]):
-            df = pd.DataFrame({'Q':self.Q[nSlice,:,:].flatten(), 
-                               'I':self.FTI_sinc[nSlice,:,:].flatten(), 
-                               'ISigma':0.01 * self.FTI_sinc[nSlice,:,:].flatten()})
-            binned_slices = pd.concat([binned_slices, self.__reBinSlice(df, binEdges, IEMin=0.01, QEMin=0.01)], axis=0) 
+        if slice is not None:
+            if slice=='center':
+                slice = self.nPoints//2+1
+            elif slice<0 or slice > (self.nPoints-1):
+                raise IndexError('Desired slice is out of boundaries of the simulation box')
+            df = pd.DataFrame({'Q':self.Q[slice,:,:].flatten(), 
+                            'I':self.FTI_sinc[slice,:,:].flatten(), 
+                            'ISigma':0.01 * self.FTI_sinc[slice,:,:].flatten()})
+            self.binned_slice = self.__reBinSlice(df, binEdges, IEMin=0.01, QEMin=0.01)
+            
+        else:
+            # accumulate bins of slices in a new Data Frame
+            binned_slices = pd.DataFrame()
+            for nSlice in range(self.FTI_sinc.shape[0]):
+                df = pd.DataFrame({'Q':self.Q[nSlice,:,:].flatten(), 
+                                'I':self.FTI_sinc[nSlice,:,:].flatten(), 
+                                'ISigma':0.01 * self.FTI_sinc[nSlice,:,:].flatten()})
+                binned_slices = pd.concat([binned_slices, self.__reBinSlice(df, binEdges, IEMin=0.01, QEMin=0.01)], axis=0) 
 
-        # another aggregation round, now group by index, which represents bins already 
-        if "QSigma" in binned_slices.keys():
-            self.binned_data = binned_slices.groupby(binned_slices.index).agg({'I':['mean', self.__determine_std, self.__determine_sem], 
-                                                                          'ISigma': self.__determine_Error, 
-                                                                          'Q':['mean', self.__determine_std, self.__determine_sem], 
-                                                                          'QSigma': self.__determine_Error})
-            self.binned_data.columns = ['I', 'IStd','ISEM', 'IError', 'Q','QStd', 'QSEM', 'QError']
-        else: #  propagated uncertainties in Q if available
-            self.binned_data = binned_slices.groupby(binned_slices.index).agg({'I':['mean', self.__determine_std, self.__determine_sem],
-                                                                               'ISigma': self.__determine_Error, 
-                                                                               'Q':['mean', self.__determine_std, self.__determine_sem]})
-            self.binned_data.columns = ['I', 'IStd','ISEM', 'IError', 'Q','QStd', 'QSEM']
-        self.binned_data['ISigma'] = self.binned_data.apply(lambda x: self.__determine_ISigma(x, IEMin), axis = 1) 
-        self.binned_data['QSigma'] = self.binned_data.apply(lambda x: self.__determine_QSigma(x, QEMin), axis = 1) 
-        self.binned_data.dropna(thresh=4, inplace=True) # empty rows appear because of groupping by index in accumulated data, which in turn consisted of binEdges, which are sometimes empty
+            # another aggregation round, now group by index, which represents bins already 
+            if "QSigma" in binned_slices.keys():
+                self.binned_data = binned_slices.groupby(binned_slices.index).agg({'I':['mean', self.__determine_std, self.__determine_sem], 
+                                                                            'ISigma': self.__determine_Error, 
+                                                                            'Q':['mean', self.__determine_std, self.__determine_sem], 
+                                                                            'QSigma': self.__determine_Error})
+                self.binned_data.columns = ['I', 'IStd','ISEM', 'IError', 'Q','QStd', 'QSEM', 'QError']
+            else: #  propagated uncertainties in Q if available
+                self.binned_data = binned_slices.groupby(binned_slices.index).agg({'I':['mean', self.__determine_std, self.__determine_sem],
+                                                                                'ISigma': self.__determine_Error, 
+                                                                                'Q':['mean', self.__determine_std, self.__determine_sem]})
+                self.binned_data.columns = ['I', 'IStd','ISEM', 'IError', 'Q','QStd', 'QSEM']
+            self.binned_data['ISigma'] = self.binned_data.apply(lambda x: self.__determine_ISigma(x, IEMin), axis = 1) 
+            self.binned_data['QSigma'] = self.binned_data.apply(lambda x: self.__determine_QSigma(x, QEMin), axis = 1) 
+            self.binned_data.dropna(thresh=4, inplace=True) # empty rows appear because of groupping by index in accumulated data, which in turn consisted of binEdges, which are sometimes empty
 
-    def drop_first_bin(self):
+    def drop_first_bin(self ):
         """
-        Drops first bin in the rebinned data frime, because it's not needed for our purposes and has way too small scattering angle Q compared to the rest of bins
+        Drops first bin in the rebinned data frime, because it's not needed for our purposes and has way too small scattering angle Q compared to the rest of bins.
+        If slice  of 3D Fourier Transform was created only, operates on that slice, otherwise on whole data.
         """
-        self.binned_data = self.binned_data.iloc[1:]
+        if 'binned_slice' in dir(self):
+            self.binned_slice = self.binned_slice.iloc[1:]
+        else:
+            self.binned_data = self.binned_data.iloc[1:]
 
 
 
@@ -244,7 +286,7 @@ class Simulation:
             print("First create a manual simultion!")
         
         #q = np.geomspace(float(self.binned_data['Q'].min()), float(self.binned_data['Q'].max()), 501)
-        self.qx_sas = self.binned_data['Q'].values
+        self.qx_sas = self.binned_data['Q'].values if 'binned_slice' in dir(self) else (self.binned_slice['Q'].values)
         self.Q_sas = np.array(self.qx_sas[np.newaxis, :])
         self.modelParameters_sas = self.model.info.parameters.defaults.copy()
         if self.shape == 'sphere':
