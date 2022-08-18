@@ -125,7 +125,7 @@ class Simulation:
         created as a convolution of sinc'ed voxel with the Fourier Transform of the structure
         """
         q_lengthbox = float(self.Q[0,0,0])-float(self.Q[0,0,1])
-        self.FTI_sinc = self.FTI*np.sinc(q_lengthbox/np.pi)
+        self.FTI_sinc = self.FTI_slice_custom*np.sinc(q_lengthbox/np.pi)
     
     ################################   The rebinnning functions   ################################
     
@@ -235,8 +235,8 @@ class Simulation:
             elif slice<0 or slice > (self.nPoints-1):
                 raise IndexError('Desired slice is out of boundaries of the simulation box')
             df = pd.DataFrame({'Q':self.Q[slice,:,:].flatten(), 
-                            'I':self.FTI_sinc[slice,:,:].flatten(), 
-                            'ISigma':0.01 * self.FTI_sinc[slice,:,:].flatten()})
+                            'I':self.FTI_sinc[:,:].flatten(), 
+                            'ISigma':0.01 * self.FTI_sinc[:,:].flatten()})
             self.binned_slice = self.__reBinSlice(df, binEdges, IEMin=0.01, QEMin=0.01)
             
         else:

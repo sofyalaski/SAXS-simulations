@@ -50,7 +50,7 @@ class Cylinder(Simulation):
         if self.hMean is None:
             self.hMean = -1
             while self.hMean<=0:
-                self.hMean = np.random.normal(loc = self.box_size*0.25, scale= self.box_size*0.1 )
+                self.hMean = np.random.normal(loc = self.box_size*0.45, scale= self.box_size*0.1 )
         if single:
             success = False
             while success == False:
@@ -105,8 +105,12 @@ class Cylinder(Simulation):
                 return torch.zeros_like(mask), True # check_failed
         if capping:
             cap = int(d*np.tan(np.deg2rad(self.theta)))
-            first_index = int(torch.argwhere(mask.any(axis=1)==1)[0][0])
-            mask[first_index+cap:,:] = 0
+            if direction_right:
+                first_index = int(torch.argwhere(mask.any(axis=1)==1)[0][0])
+                mask[first_index+cap:,:] = 0
+            else:
+                last_index = int(torch.argwhere(mask.any(axis=1)==1)[0][-1])
+                mask[:last_index - cap,:] = 0
         return mask, False
 
 
