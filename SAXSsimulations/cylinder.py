@@ -6,7 +6,7 @@ from SAXSsimulations.create_form import Simulation
   
 class Cylinder(Simulation):
     def __init__(self,size, nPoints, volFrac = 0.05):
-        Simulation.__init__(self, size, nPoints, volFrac = 0.05)  
+        Simulation.__init__(self, size, nPoints, volFrac)  
         self.hWidth = None
         self.hMean = None
         self.rWidth = None
@@ -45,12 +45,12 @@ class Cylinder(Simulation):
         if self.rMean is None:
             self.rMean = -1
             while self.rMean<=0:
-                self.rMean = np.random.normal(loc = self.box_size*0.05, scale= self.box_size*0.1 )
+                self.rMean = np.random.normal(loc = self.box_size*0.05, scale= self.box_size*0.05 )
 
         if self.hMean is None:
             self.hMean = -1
             while self.hMean<=0:
-                self.hMean = np.random.normal(loc = self.box_size*0.4, scale= self.box_size*0.1 )
+                self.hMean = np.random.normal(loc = self.box_size*0.25, scale= self.box_size*0.1 )
         if single:
             success = False
             while success == False:
@@ -86,6 +86,29 @@ class Cylinder(Simulation):
                     im = ax.imshow(circle_at_d2)
                     plt.show()      
     '''   
+    
+    def __create_slice(self, r,r_ellipse, center, d, capping, direction_right, check):
+        """
+        FIXME description
+        """
+        if direction_right:
+            center_y = center[1] + d*np.tan(np.deg2rad(self.theta)) # because of the theta rotation the y-coordinate of center at fixed x  slice shifts
+            center_z = center[2] + d*np.tan(np.deg2rad(self.phi)) # because of phi rotation the z-coordinate of center at fixed x shifts
+        else:
+            center_y = center[1] - d*np.tan(np.deg2rad(self.theta))
+            center_z = center[2] + d*np.tan(np.deg2rad(self.phi))
+        x2y = self.grid[None,:]
+        x2z = self.grid[:,None]
+        mask = (x2y-center_y)**2/r**2 + (x2z-center_z)**2/r_ellipse**2 <=1
+        if check:
+            if float(mask.sum()) ==0 or (mask[0,:] == True).any() or (mask[-1,:] == True).any() or (mask[:,0] == True).any() or (mask[:, -1] == True).any():
+                return torch.zeros_like(mask), True # check_failed
+        if capping:
+            cap = int(d*np.tan(np.deg2rad(self.theta)))
+            first_index = int(torch.argwhere(mask.any(axis=1)==1)[0][0])
+            mask[first_index+cap:,:] = 0
+        return mask, False
+
 
     def __generate_cylinder(self, radius, height, center):
         """
@@ -100,10 +123,10 @@ class Cylinder(Simulation):
         """
 
         #working on slices: slice through x
-        x2y = self.grid[None,:]
-        x2z = self.grid[:,None]
-        cylinder_projection_on_x = int(height/2//self.grid_space*np.sin(np.deg2rad(self.theta))*np.sin(np.deg2rad(self.phi))) #in one direction
-        radius_at_slice = np.cos(np.deg2rad(self.theta))*radius* np.cos(np.deg2rad(self.phi)) # calculate the radius of circle at slice at both rotations
+        central_axis_cylinder_projection_on_x = height/2//self.grid_space*np.cos(np.deg2rad(self.theta))*np.cos(np.deg2rad(self.phi)) # projection of central cylinder axis on x-axis
+        cylinder_resy_projection_on_x =  np.sin(np.deg2rad(self.theta))*radius # projection of the rest of the cylinder after the central axis on x-axis
+        cylinder_projection_on_x = int(central_axis_cylinder_projection_on_x+ cylinder_resy_projection_on_x) # projection of whole cylinder on x-axis
+        radius_at_slice = radius/np.cos(np.deg2rad(self.theta))/np.cos(np.deg2rad(self.phi)) # calculate the radius of ellipse at slice at both rotations
         # if central slice on grid:
         if len(self.grid[self.grid == center[0]])==1:
             central_slice = int(torch.argwhere(self.grid==center[0])[0,0])# start with the central slice
@@ -112,29 +135,21 @@ class Cylinder(Simulation):
                 return False
             # check if circles at the ends of cylinder are inside the box  
             d = self.grid_space*cylinder_projection_on_x
-            c_y_1 = center[1] + d*np.tan(np.deg2rad(self.theta)) # because of the theta rotation the y-coordinate of center at fixed x  slice shifts
-            c_y_2 = center[1] - d*np.tan(np.deg2rad(self.theta)) 
-            c_z_1 = center[2] + d*np.tan(np.deg2rad(self.phi)) # because of phi rotation the z-coordinate of center at fixed x shifts
-            c_z_2 = center[2] - d*np.tan(np.deg2rad(self.phi)) 
-            circle_1 = (x2y-c_y_1)**2 + (x2z-c_z_1)**2 < radius_at_slice**2 # mask the circle location
-            circle_2 = (x2y-c_y_2)**2 + (x2z-c_z_2)**2 < radius_at_slice**2 
-            if  float(circle_1.sum()) ==0 or float(circle_2.sum())== 0 or (circle_1[0,:] == True).any() or (circle_1[-1,:] == True).any() or (circle_1[:,0] == True).any() or (circle_1[:, -1] == True).any() or (circle_2[0,:] == True).any() or (circle_2[-1,:] == True).any() or (circle_2[:,0] == True).any() or (circle_2[:, -1] == True).any():
+            capping = True
+            circle_1, check_1 = self.__create_slice(radius,radius_at_slice, center,d, direction_right = True, check = True)# mask the ellipse location
+            circle_2, check_2 = self.__create_slice(radius,radius_at_slice, center,d, direction_right = False, check = True)
+
+            if  check_1 or check_2:
                 print('--->outside on yz-plane')
                 return  False
             # all checks done, the latest sphere is not touching the edge of the box or is completelyoutside of it:  cylinder fits the box, fill the densities by slices
-
             for i in range(cylinder_projection_on_x): # last grid point fully covering the radius is considered , cylinder is symmetric so work in both directions
                 d = self.grid_space*i # calculate the distance grom the center to the slice
-                c_y_1 = center[1] + d*np.tan(np.deg2rad(self.theta)) 
-                c_y_2 = center[1] - d*np.tan(np.deg2rad(self.theta)) 
-                c_z_1 = center[2] + d*np.tan(np.deg2rad(self.phi)) 
-                c_z_2 = center[2] - d*np.tan(np.deg2rad(self.phi)) 
-
-                circle_1 = (x2y-c_y_1)**2 + (x2z-c_z_1)**2 < radius_at_slice**2
-                circle_2 = (x2y-c_y_2)**2 + (x2z-c_z_2)**2 < radius_at_slice**2 
-
-                self.box[central_slice+i,circle_1] = 1 # density inside cylinder
-                self.box[central_slice-i,circle_2] = 1
+                capping = True if d> central_axis_cylinder_projection_on_x-cylinder_projection_on_x else False
+                mask,_ =self.__create_slice(radius,radius_at_slice, center, d, capping, direction_right = True, check = False)
+                self.box[central_slice+i,mask] = 1 # density inside cylinder
+                mask,_ = self.__create_slice(radius,radius_at_slice, center, d, capping, direction_right = False, check = False)
+                self.box[central_slice+i,mask] = 1
 
         else:
             # if the center of the cylinder in between of two grid points, find those points and do the same in both dierections
@@ -143,33 +158,24 @@ class Cylinder(Simulation):
                 print('--->outside of x plane')
                 return  False
             # check if circles at the ends of cylinder are inside the box  
-            d = self.grid_space*cylinder_projection_on_x
-            c_y_1 = center[1] + d*np.tan(np.deg2rad(self.theta)) # because of the theta rotation the y-coordinate of center at fixed x  slice shifts
-            c_y_2 = center[1] - d*np.tan(np.deg2rad(self.theta)) 
-            c_z_1 = center[2] + d*np.tan(np.deg2rad(self.phi)) # because of phi rotation the z-coordinate of center at fixed x shifts
-            c_z_2 = center[2] - d*np.tan(np.deg2rad(self.phi)) 
-            circle_1 = (x2y-c_y_1)**2 + (x2z-c_z_1)**2 < radius_at_slice**2 # mask the circle location
-            circle_2 = (x2y-c_y_2)**2 + (x2z-c_z_2)**2 < radius_at_slice**2             
-          
-            if  float(circle_1.sum()) ==0 or float(circle_2.sum())== 0 or (circle_1[0,:] == True).any() or (circle_1[-1,:] == True).any() or (circle_1[:,0] == True).any() or (circle_1[:, -1] == True).any() or (circle_2[0,:] == True).any() or (circle_2[-1,:] == True).any() or (circle_2[:,0] == True).any() or (circle_2[:, -1] == True).any():
+            d1 = self.grid_space*cylinder_projection_on_x + center[0] - self.grid[nearest_bigger_ind-1]
+            d2 = self.grid_space*cylinder_projection_on_x + self.grid[nearest_bigger_ind]-center[0]
+            capping = True
+            circle_1,check_1 = self.__create_slice(radius,radius_at_slice, center, d1, capping, direction_right = True, check = True)
+            circle_2,check_2 = self.__create_slice(radius,radius_at_slice, center, d2, capping, direction_right = False, check = True)        
+            if  check_1 or check_2:
                 print('--->outside on yz-plane')
                 return False
             # all checks done, cylinder fitsd the box, fill the densities by slices
             for i in range(cylinder_projection_on_x):
                 d1 = self.grid_space*i + center[0] - self.grid[nearest_bigger_ind-1]
+                capping = True if d1> central_axis_cylinder_projection_on_x-cylinder_projection_on_x else False
+                mask,_ = self.__create_slice(radius,radius_at_slice, center, d1, capping, direction_right = True, check = False)
+                self.box[nearest_bigger_ind+i,mask] = 1 # density inside cylinder
                 d2 = self.grid_space*i + self.grid[nearest_bigger_ind]-center[0]
-
-                c_y_1 = center[1] + d1*np.tan(np.deg2rad(self.theta)) 
-                c_y_2 = center[1] - d2*np.tan(np.deg2rad(self.theta)) 
-                c_z_1 = center[2] + d1*np.tan(np.deg2rad(self.phi)) 
-                c_z_2 = center[2] - d2*np.tan(np.deg2rad(self.phi)) 
-
-                circle_at_d1 = (x2y-c_y_1)**2 + (x2z-c_z_1)**2 < radius_at_slice**2
-                circle_at_d2 = (x2y-c_y_2)**2 + (x2z-c_z_2)**2 < radius_at_slice**2
-
-                self.box[nearest_bigger_ind+i,circle_at_d1] = 1
-                self.box[nearest_bigger_ind-1-i,circle_at_d2] = 1
-
+                capping = True if d2> central_axis_cylinder_projection_on_x-cylinder_projection_on_x else False
+                mask,_ = self.__create_slice(radius,radius_at_slice, center, d2, capping, direction_right = False, check = False)
+                self.box[nearest_bigger_ind-1+i,mask] = 1
         return True
 
     def save_data(self,  directory='.', for_SasView = True):
