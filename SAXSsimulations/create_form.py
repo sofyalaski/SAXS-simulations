@@ -286,7 +286,7 @@ class Simulation:
             print("First create a manual simultion!")
         
         #q = np.geomspace(float(self.binned_data['Q'].min()), float(self.binned_data['Q'].max()), 501)
-        self.qx_sas = self.binned_data['Q'].values if 'binned_slice' in dir(self) else (self.binned_slice['Q'].values)
+        self.qx_sas = self.binned_slice['Q'].values if 'binned_slice' in dir(self) else (self.binned_data['Q'].values)
         self.Q_sas = np.array(self.qx_sas[np.newaxis, :])
         self.modelParameters_sas = self.model.info.parameters.defaults.copy()
         if self.shape == 'sphere':
@@ -325,3 +325,15 @@ class Simulation:
         self.modelParameters_sas.update({'scale':value})
         self.__create_sas_model()
     
+
+    def intensity_2d_sas(self):
+        q2x = self.qx_sas + 0* self.qx_sas[:,np.newaxis]
+        q2z = self.qx_sas[:,np.newaxis] + 0* self.qx_sas
+        kansas = q2x.shape
+        q2x = q2x.reshape(q2x.size)
+        q2z = q2z.reshape(q2z.size)
+
+        kernel=self.model.make_kernel([q2x, q2z])
+        self.Intensity_2D_sas = sasmodels.direct_model.call_kernel(kernel, self.modelParameters_sas)
+        self.Intensity_2D_sas = self.Intensity_2D_sas.reshape(kansas)
+        self.model.release()

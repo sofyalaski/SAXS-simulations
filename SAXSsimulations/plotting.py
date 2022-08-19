@@ -124,3 +124,29 @@ def plot_simulation_vs_sas( binned_data, sas_q, sas_intensity):
     plt.xscale('log') 
     plt.yscale('log') 
     plt.legend()
+
+def plt_slices_sum(simulation):
+    fig,axs = plt.subplots(1,3,figsize = (15,5))
+    ax = axs[0]
+    im = ax.imshow(simulation.density.sum(axis=0))
+    ax = axs[1]
+    im = ax.imshow(simulation.density.sum(axis=1))
+    ax = axs[2]
+    im = ax.imshow(simulation.density.sum(axis=2))
+    plt.show()    
+
+def plot_slices_at_interval(interval,i,simulation, direction):
+    fig,axs = plt.subplots(1,10,figsize = (20,6))
+    for t in range(10):
+        ax = axs[t]
+        if direction == 'x':
+            ax.imshow(simulation.density[i +t*interval ,:,:])
+        elif direction == 'y':
+            ax.imshow(simulation.density[:,i +t*interval ,:])
+        else:
+            ax.imshow(simulation.density[:,:,i +t*interval ])
+    
+
+def plot_2d_sas(Intensity_2D_sas):
+    plt.imshow(np.log10(Intensity_2D_sas))
+    plt.colorbar()
