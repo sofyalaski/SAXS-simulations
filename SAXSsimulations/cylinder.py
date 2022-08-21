@@ -35,12 +35,15 @@ class Cylinder(Simulation):
         Radius Mean and Hight Mean are sampled from normal distribution or were specified when instantiating a Cylinder object.
         Cylinder radius and height are sampled from a normal distribution around the respective Means. 
         Center is sampled from the uniform distribution or was specified for a single cylinder.
-        Theta angle is sampled to indicate rotation in xy-plane and Phi to indicate rotation xz-plane.
+        Theta angle is sampled to indicate rotation between the cylinder axis to the beam  and Phi to indicate the  rotation about the beam.
         input:
             single[boolean] : create a single sphere in a box?        
         """
         self.theta = np.random.uniform(low = 0, high = 45)
         self.phi = np.random.uniform(low = 0, high = 45)
+
+
+
         
         if self.rMean is None:
             self.rMean = -1
@@ -79,25 +82,26 @@ class Cylinder(Simulation):
                         .format(vf = self.volume_fraction, h = height, r = radius, cx=center[0], cy = center[1], cz = center[2]))
 
     
-    def __create_slice(self, r,r_ellipse, center, d, capping, direction_right, check):
+    def __create_slice(self, r_theta,r_phi, center, d, capping, direction_right, check):
         """
         FIXME description
         """
         if direction_right:
-            center_y = center[1] + d*np.tan(np.deg2rad(self.theta)*np.sin(np.deg2rad(self.phi))) # because of the theta rotation the y-coordinate of center at fixed x  slice shifts
-            center_z = center[2] + d*np.tan(np.deg2rad(self.phi)) # because of phi rotation the z-coordinate of center at fixed x shifts
+            center_y = center[1] + d*np.tan(np.deg2rad(self.phi)) # because of the theta rotation the y-coordinate of center at fixed x  slice shifts
+            center_z = center[2] + d*np.tan(np.deg2rad(self.theta)) # because of phi rotation the z-coordinate of center at fixed x shifts
 
         else:
-            center_y = center[1] - d*np.tan(np.deg2rad(self.theta))*np.sin(np.deg2rad(self.phi))
-            center_z = center[2] - d*np.tan(np.deg2rad(self.phi))
+            center_y = center[1] - d*np.tan(np.deg2rad(self.phi))
+            center_z = center[2] - d*np.tan(np.deg2rad(self.theta))
         x2y = self.grid[None,:]
         x2z = self.grid[:,None]
-        mask = (x2y-center_y)**2/r**2 + (x2z-center_z)**2/r_ellipse**2 <=1
+        mask = (x2y-center_y)**2/r_phi**2 + (x2z-center_z)**2/r_theta**2 <=1
         if check:
             if float(mask.sum()) ==0 or (mask[0,:] == True).any() or (mask[-1,:] == True).any() or (mask[:,0] == True).any() or (mask[:, -1] == True).any():
                 return torch.zeros_like(mask), True # check_failed
         if capping:
-            cap = int(d*np.tan(np.deg2rad(self.theta))*np.sin(np.deg2rad(self.phi)))
+            cap_theta = int(d*np.tan(np.deg2rad(self.theta)))
+            cap_phi = int(d*np.tan(np.deg2rad(self.phi)))
             if direction_right:
                 first_index = int(torch.argwhere(mask.any(axis=1))[0][0])
                 mask[first_index+cap:,:] = 0
@@ -123,7 +127,8 @@ class Cylinder(Simulation):
         central_axis_cylinder_projection_on_x = height/2//self.grid_space*np.cos(np.deg2rad(self.theta))*np.cos(np.deg2rad(self.phi)) # projection of central cylinder axis on x-axis
         cylinder_rest_projection_on_x =  np.sin(np.deg2rad(self.theta))*np.sin(np.deg2rad(self.phi))*radius # projection of the rest of the cylinder after the central axis on x-axis
         cylinder_projection_on_x = math.ceil(central_axis_cylinder_projection_on_x+ cylinder_rest_projection_on_x) # projection of whole cylinder on x-axis
-        radius_at_slice = radius/np.cos(np.deg2rad(self.theta))/np.cos(np.deg2rad(self.phi)) # calculate the radius of ellipse at slice at both rotations
+        radius_at_theta = radius/np.cos(np.deg2rad(self.theta)) # calculate the radius of ellipse at slice at both rotations
+        radius_at_phi = radius/np.cos(np.deg2rad(self.phi))
         # if central slice on grid:
         if len(self.grid[self.grid == center[0]])==1:
             central_slice = int(torch.argwhere(self.grid==center[0])[0,0])# start with the central slice
@@ -133,8 +138,8 @@ class Cylinder(Simulation):
             # check if circles at the ends of cylinder are inside the box  
             d = self.grid_space*cylinder_projection_on_x
             capping = True
-            circle_1, check_1 = self.__create_slice(radius,radius_at_slice, center,d, direction_right = True, check = True)# mask the ellipse location
-            circle_2, check_2 = self.__create_slice(radius,radius_at_slice, center,d, direction_right = False, check = True)
+            circle_1, check_1 = self.__create_slice(radius_at_theta,radius_at_phi, center,d, direction_right = True, check = True)# mask the ellipse location
+            circle_2, check_2 = self.__create_slice(radius_at_theta,radius_at_phi, center,d, direction_right = False, check = True)
 
             if  check_1 or check_2:
                 #print('--->outside on yz-plane')
@@ -144,9 +149,9 @@ class Cylinder(Simulation):
                 d = self.grid_space*i # calculate the distance grom the center to the slice
                 capping = float(d)/self.grid_space> central_axis_cylinder_projection_on_x-cylinder_rest_projection_on_x 
 
-                mask,_ =self.__create_slice(radius,radius_at_slice, center, d, capping, direction_right = True, check = False)
+                mask,_ =self.__create_slice(radius_at_theta,radius_at_phi, center, d, capping, direction_right = True, check = False)
                 self.box[central_slice+i,mask] = 1 # density inside cylinder
-                mask,_ = self.__create_slice(radius,radius_at_slice, center, d, capping, direction_right = False, check = False)
+                mask,_ = self.__create_slice(radius_at_theta,radius_at_phi, center, d, capping, direction_right = False, check = False)
                 self.box[central_slice-i,mask] = 1
 
         else:
@@ -159,8 +164,8 @@ class Cylinder(Simulation):
             d1 = self.grid_space*cylinder_projection_on_x + self.grid[nearest_bigger_ind]-center[0]
             d2 = self.grid_space*cylinder_projection_on_x + center[0] - self.grid[nearest_bigger_ind-1]
             capping = True
-            circle_1,check_1 = self.__create_slice(radius,radius_at_slice, center, d1, capping, direction_right = True, check = True)
-            circle_2,check_2 = self.__create_slice(radius,radius_at_slice, center, d2, capping, direction_right = False, check = True)        
+            circle_1,check_1 = self.__create_slice(radius_at_theta,radius_at_phi, center, d1, capping, direction_right = True, check = True)
+            circle_2,check_2 = self.__create_slice(radius_at_theta,radius_at_phi, center, d2, capping, direction_right = False, check = True)        
             if  check_1 or check_2:
                 #print('--->outside on yz-plane')
                 return False
@@ -168,11 +173,11 @@ class Cylinder(Simulation):
             for i in range(cylinder_projection_on_x):
                 d1 = self.grid_space*i + self.grid[nearest_bigger_ind]-center[0]
                 capping = float(d1)/self.grid_space> central_axis_cylinder_projection_on_x-cylinder_rest_projection_on_x 
-                mask,_ = self.__create_slice(radius,radius_at_slice, center, d1, capping, direction_right = True, check = False)
+                mask,_ = self.__create_slice(radius_at_theta,radius_at_phi, center, d1, capping, direction_right = True, check = False)
                 self.box[nearest_bigger_ind+i,mask] = 1 # density inside cylinder
                 d2 = self.grid_space*i + center[0] - self.grid[nearest_bigger_ind-1]
                 capping = float(d2)/self.grid_space> central_axis_cylinder_projection_on_x-cylinder_rest_projection_on_x 
-                mask,_ = self.__create_slice(radius,radius_at_slice, center, d2, capping, direction_right = False, check = False)
+                mask,_ = self.__create_slice(radius_at_theta,radius_at_phi, center, d2, capping, direction_right = False, check = False)
                 self.box[nearest_bigger_ind-1-i,mask] = 1
         return True
 
