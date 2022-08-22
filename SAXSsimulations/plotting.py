@@ -54,6 +54,9 @@ def plot_3D_structure(entity, grid, realspace = True, path = None):
     ax.set_xlim(0,nPoints)
     ax.set_ylim(0,nPoints)
     ax.set_zlim(0,nPoints)
+    ax.set_xlabel('X')
+    ax.set_ylabel('Y')
+    ax.set_zlabel('Z')
     if path:
         plt.savefig(path)
         plt.close()
