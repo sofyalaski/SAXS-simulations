@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+import matplotlib.pyplot as plt
 import math
 from SAXSsimulations.create_form import Simulation
   
@@ -92,7 +93,8 @@ class Cylinder(Simulation):
             center_z = center[2] - d*np.tan(np.deg2rad(self.theta))
         x2y = self.grid[None,:]
         x2z = self.grid[:,None]
-        mask = (x2y-center_y)**2/r_phi**2 + (x2z-center_z)**2/r_theta**2 <=1
+        mask = ((x2y-center_y)**2/r_phi**2 + (x2z-center_z)**2/r_theta**2 <=1).type(torch.bool)
+        mask_sum = mask.sum()
         if check:
             if float(mask.sum()) ==0 or (mask[0,:] == True).any() or (mask[-1,:] == True).any() or (mask[:,0] == True).any() or (mask[:, -1] == True).any():
                 return torch.zeros_like(mask), True # check_failed
@@ -106,17 +108,23 @@ class Cylinder(Simulation):
             # say, point B lies on cap_phi and on diameter of ellipse r_phi -> it has the coord (cap_phi, center_z) -> AB = center_z - cap_theta
             #second point on the line is through triangle ABC, C outside of the ellipse, perp to AB: tan (theta) = BC/AB -> 
             # coordinates of C =(cap_phi - tan(theta)*(center_z - cap_theta), center_z)
-            print(cap_theta, cap_phi, r_theta, r_phi)
-            #x = np.array([],[])
-
-            first_index_y = int(torch.argwhere(mask.any(axis=0))[0][0])
-            last_index_y = int(torch.argwhere(mask.any(axis=0))[0][-1])
-            first_index_z = int(torch.argwhere(mask.any(axis=1))[0][0])
-            last_index_z = int(torch.argwhere(mask.any(axis=1))[0][-1])
+            #isn't there a mix up in phi and theta?
+            first_index_y = center_y - r_theta #int(torch.argwhere(mask.any(axis=0))[0][0])
+            last_index_y = center_y + r_theta # int(torch.argwhere(mask.any(axis=0))[0][-1])
+            first_index_z = center_z - r_phi # int(torch.argwhere(mask.any(axis=1))[0][0])
+            last_index_z = center_z + r_phi #int(torch.argwhere(mask.any(axis=1))[0][-1])
+            print('f_y:({f_y:.2f},{c_z:.2f}), l_y:({l_y:.2f},{c_z:.2f}), f_z:({c_y:.2f},{f_z:.2f}), l_z:({c_y:.2f},{l_z:.2f})'.format(f_y = first_index_y, f_z = first_index_z, l_y = last_index_y, l_z  =last_index_z, c_y = center_y, c_z = center_z))
+            A = (float(first_index_y + cap_theta), float(last_index_z-cap_phi))
+            C = (float(first_index_y + cap_theta - np.tan(np.deg2rad(self.theta + self.phi))*(last_index_z - cap_phi-center_z)), float(center_z ))
+            print('A: ({a0:.2f},{a1:.2f}), C: ({c0:.2f},{c1:.2f})'.format(a0 = A[0], a1  =A[1], c0 = C[0], c1 = C[1])) 
+            line = np.linalg.solve(np.array([[A[0], 1],[C[0],1]]), np.array([A[1],C[1]]))
+            print("Ellipse equation: (x-({y:+.2f}))^2/{r_theta:.2f}^2 +(y -({z:+.2f}))^2/{r_phi:.2f}^2<1, line equation: y = {a:.2f}x{b:+.2f}, cap at ({cap_phi:.2f},{cap_theta:.2f})".
+            format(r_theta = float(r_theta), r_phi = float(r_phi), cap_theta = float(cap_theta), cap_phi = float(cap_phi), y = float(center_y), z = float(center_z), a = line[0], b = line[1]))
+            cap_mask = (x2y *line[0]+line[1]>x2z).type(torch.bool)
             if direction_right:
-                mask[last_index_y-cap_phi:, first_index_z+cap_theta:] = 0
+                mask = torch.logical_and(mask, cap_mask)
             else:
-                mask[:first_index_y+cap_phi,:last_index_z - cap_theta] = 0
+                mask = torch.logical_and(mask, torch.logical_not(cap_mask))
         return mask, False
 
 
@@ -162,7 +170,7 @@ class Cylinder(Simulation):
                 if capping:
                     cap_overhead = i > central_axis_cylinder_projection_on_x
                 else:
-                    cap_overhead = None
+                    cap_overhead = False
                 mask,_ =self.__create_slice(height, radius_at_theta,radius_at_phi, center, d, capping, cap_overhead, direction_right = True, check = False)
                 self.box[central_slice+i,mask] = 1 # density inside cylinder
                 mask,_ = self.__create_slice(height, radius_at_theta,radius_at_phi, center, d, capping, cap_overhead, direction_right = False, check = False)
@@ -190,8 +198,9 @@ class Cylinder(Simulation):
                 capping = i> central_axis_cylinder_projection_on_x-cylinder_rest_projection_on_x 
                 if capping:
                     cap_overhead = i > central_axis_cylinder_projection_on_x
+                    print('index:', i, cap_overhead)
                 else:
-                    cap_overhead = None
+                    cap_overhead = False
                 mask,_ = self.__create_slice(height, radius_at_theta,radius_at_phi, center, d1, capping, cap_overhead, direction_right = True, check = False)
                 self.box[nearest_bigger_ind+i,mask] = 1 # density inside cylinder
                 d2 = self.grid_space*i + center[0] - self.grid[nearest_bigger_ind-1]
