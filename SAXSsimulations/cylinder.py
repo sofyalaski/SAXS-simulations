@@ -99,32 +99,39 @@ class Cylinder(Simulation):
             if float(mask.sum()) ==0 or (mask[0,:] == True).any() or (mask[-1,:] == True).any() or (mask[:,0] == True).any() or (mask[:, -1] == True).any():
                 return torch.zeros_like(mask), True # check_failed
         if capping:
-            cap_theta = r_theta + (height/2-d/np.cos(np.deg2rad(self.theta))) / np.sin(np.deg2rad(self.theta))
-            cap_phi = r_phi + (height/2-d/np.cos(np.deg2rad(self.phi))) / np.sin(np.deg2rad(self.phi))
-            if not cap_overhead:
-                cap_theta = r_theta*2 - cap_theta 
-                cap_phi = r_phi*2 - cap_phi
+            # calculate the distance from the center of cylinder to the capping plane on the cylinder axis - > dependent on both phi and theta
+            d_cap = (height/2-(d/np.cos(np.deg2rad(self.theta))/np.cos(np.deg2rad(self.phi)))) 
+            cap_theta =  d_cap / np.sin(np.deg2rad(self.theta))
+            cap_phi =  d_cap / np.sin(np.deg2rad(self.phi))
+            #print("r_phi is {r1:.2f} r theta is {r2:.2f}, cap at ({cap_phi:.2f},{cap_theta:.2f})".format(r2 = r_theta, r1 = r_phi,cap_theta = float(cap_theta), cap_phi = float(cap_phi)))
+            #print(cap_overhead, cap_phi, cap_theta)
+            # if d_cap positiv the cap is bigger than radius else, it's smaller, anyaway, because we then devide by the sinus 
+            #if d_cap >0:
+            cap_theta = r_theta+cap_theta
+            cap_phi = r_phi+cap_phi
+            #else:
+            
+            #print("cap recalculated ({cap_phi:.2f},{cap_theta:.2f})".format(cap_theta = float(cap_theta), cap_phi = float(cap_phi)))
             # point A is first on the line = (cap_phi, cap_theta) now figure out point 2
             # say, point B lies on cap_phi and on diameter of ellipse r_phi -> it has the coord (cap_phi, center_z) -> AB = center_z - cap_theta
             #second point on the line is through triangle ABC, C outside of the ellipse, perp to AB: tan (theta) = BC/AB -> 
             # coordinates of C =(cap_phi - tan(theta)*(center_z - cap_theta), center_z)
             #isn't there a mix up in phi and theta?
-            first_index_y = center_y - r_theta #int(torch.argwhere(mask.any(axis=0))[0][0])
-            last_index_y = center_y + r_theta # int(torch.argwhere(mask.any(axis=0))[0][-1])
-            first_index_z = center_z - r_phi # int(torch.argwhere(mask.any(axis=1))[0][0])
-            last_index_z = center_z + r_phi #int(torch.argwhere(mask.any(axis=1))[0][-1])
-            print('f_y:({f_y:.2f},{c_z:.2f}), l_y:({l_y:.2f},{c_z:.2f}), f_z:({c_y:.2f},{f_z:.2f}), l_z:({c_y:.2f},{l_z:.2f})'.format(f_y = first_index_y, f_z = first_index_z, l_y = last_index_y, l_z  =last_index_z, c_y = center_y, c_z = center_z))
+            first_index_y = center_y - r_phi #int(torch.argwhere(mask.any(axis=0))[0][0])
+            last_index_y = center_y + r_phi # int(torch.argwhere(mask.any(axis=0))[0][-1])
+            first_index_z = center_z - r_theta # int(torch.argwhere(mask.any(axis=1))[0][0])
+            last_index_z = center_z + r_theta #int(torch.argwhere(mask.any(axis=1))[0][-1])
+            #print('f_y:({f_y:.2f},{c_z:.2f}), l_y:({l_y:.2f},{c_z:.2f}), f_z:({c_y:.2f},{f_z:.2f}), l_z:({c_y:.2f},{l_z:.2f})'.format(f_y = first_index_y, f_z = first_index_z, l_y = last_index_y, l_z  =last_index_z, c_y = center_y, c_z = center_z))
             A = (float(first_index_y + cap_theta), float(last_index_z-cap_phi))
             C = (float(first_index_y + cap_theta - np.tan(np.deg2rad(self.theta + self.phi))*(last_index_z - cap_phi-center_z)), float(center_z ))
-            print('A: ({a0:.2f},{a1:.2f}), C: ({c0:.2f},{c1:.2f})'.format(a0 = A[0], a1  =A[1], c0 = C[0], c1 = C[1])) 
+            #print('A: ({a0:.2f},{a1:.2f}), C: ({c0:.2f},{c1:.2f})'.format(a0 = A[0], a1  =A[1], c0 = C[0], c1 = C[1])) 
+            
             line = np.linalg.solve(np.array([[A[0], 1],[C[0],1]]), np.array([A[1],C[1]]))
-            print("Ellipse equation: (x-({y:+.2f}))^2/{r_theta:.2f}^2 +(y -({z:+.2f}))^2/{r_phi:.2f}^2<1, line equation: y = {a:.2f}x{b:+.2f}, cap at ({cap_phi:.2f},{cap_theta:.2f})".
-            format(r_theta = float(r_theta), r_phi = float(r_phi), cap_theta = float(cap_theta), cap_phi = float(cap_phi), y = float(center_y), z = float(center_z), a = line[0], b = line[1]))
             cap_mask = (x2y *line[0]+line[1]>x2z).type(torch.bool)
-            if direction_right:
-                mask = torch.logical_and(mask, cap_mask)
-            else:
-                mask = torch.logical_and(mask, torch.logical_not(cap_mask))
+            mask = torch.logical_and(mask, torch.logical_not(cap_mask))
+
+            print("Ellipse equation: (x-({y:+.2f}))^2/{r_theta:.2f}^2 +(y -({z:+.2f}))^2/{r_phi:.2f}^2<1, line equation: y = {a:.2f}x{b:+.2f}".
+            format(r_theta = float(r_theta), r_phi = float(r_phi),  y = float(center_y), z = float(center_z), a = line[0], b = line[1]))
         return mask, False
 
 
