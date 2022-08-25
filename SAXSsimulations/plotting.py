@@ -139,7 +139,7 @@ def plt_slices_sum(simulation):
     plt.show()    
 
 def plot_slices_at_interval(interval,i,simulation, direction):
-    fig,axs = plt.subplots(1,10,figsize = (20,6))
+    fig,axs = plt.subplots(1,10,figsize = (20,10))
     for t in range(10):
         ax = axs[t]
         if direction == 'x':
