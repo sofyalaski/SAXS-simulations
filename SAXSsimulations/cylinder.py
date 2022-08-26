@@ -90,12 +90,13 @@ class Cylinder(Simulation):
         FIXME description
         """
         if direction_right:
-            center_y = center[1] + safe_multiplier(d,np.tan(np.deg2rad(self.phi))) # because of the theta rotation the y-coordinate of center at fixed x  slice shifts
-            center_z = center[2] + safe_multiplier(d,np.tan(np.deg2rad(self.theta))) # because of phi rotation the z-coordinate of center at fixed x shifts
+            center_y = center[1] + safe_multiplier(d,np.tan(np.deg2rad(self.phi))) if self.phi !=0 else center[1] # because of the theta rotation the y-coordinate of center at fixed x  slice shifts
+            center_z = center[2] + safe_multiplier(d,np.tan(np.deg2rad(self.theta))) if self.theta !=0 else center[2] # because of phi rotation the z-coordinate of center at fixed x shifts
 
         else:
-            center_y = center[1] - safe_multiplier(d,np.tan(np.deg2rad(self.phi)))
-            center_z = center[2] - safe_multiplier(d,np.tan(np.deg2rad(self.theta)))
+            center_y = center[1] - safe_multiplier(d,np.tan(np.deg2rad(self.phi))) if self.phi !=0 else center[1]
+            center_z = center[2] - safe_multiplier(d,np.tan(np.deg2rad(self.theta))) if self.theta !=0 else center[2] 
+        print(center, center_y, center_z,d)
         x2y = self.grid[None,:]
         x2z = self.grid[:,None]
         mask = ((x2y-center_y)**2/r_phi**2 + (x2z-center_z)**2/r_theta**2 <=1).type(torch.bool)
@@ -109,11 +110,13 @@ class Cylinder(Simulation):
             cap_theta =  safe_dividend(d_cap, np.sin(np.deg2rad(self.theta)))
             cap_phi =  safe_dividend(d_cap, np.sin(np.deg2rad(self.phi)))
             #print("r_phi is {r1:.2f} r theta is {r2:.2f}, cap at ({cap_phi:.2f},{cap_theta:.2f})".format(r2 = r_theta, r1 = r_phi,cap_theta = float(cap_theta), cap_phi = float(cap_phi)))
-            #print(cap_phi, cap_theta)
+
             # if d_cap positiv the cap is bigger than radius else, it's smaller, anyaway, because we then devide by the sinus 
             #if d_cap >0:
-            cap_theta = r_theta+cap_theta
-            cap_phi = r_phi+cap_phi
+            cap_theta = np.abs(float(r_theta+cap_theta)) if self.theta !=0 else 0
+            cap_phi = np.abs(float(r_phi+cap_phi)) if self.phi!=0 else 0
+            #print(cap_phi, cap_theta, r_phi, r_theta)
+
             #else:
             
             #print("cap recalculated ({cap_phi:.2f},{cap_theta:.2f})".format(cap_theta = float(cap_theta), cap_phi = float(cap_phi)))
@@ -127,27 +130,45 @@ class Cylinder(Simulation):
             first_index_z = center_z - r_theta # int(torch.argwhere(mask.any(axis=1))[0][0])
             last_index_z = center_z + r_theta #int(torch.argwhere(mask.any(axis=1))[0][-1])
             #print('f_y:({f_y:.2f},{c_z:.2f}), l_y:({l_y:.2f},{c_z:.2f}), f_z:({c_y:.2f},{f_z:.2f}), l_z:({c_y:.2f},{l_z:.2f})'.format(f_y = first_index_y, f_z = first_index_z, l_y = last_index_y, l_z  =last_index_z, c_y = center_y, c_z = center_z))
-            A = (float(first_index_y + cap_phi), float(last_index_z-cap_theta))
-            if self.theta ==0:
-                C =(float(first_index_y + cap_phi), float(last_index_z))
-            elif self.phi ==0:
-                C = (float(first_index_y), float(last_index_z-cap_theta))
-            else:
-                C = (float(first_index_y + cap_phi - safe_multiplier(np.tan(np.deg2rad(self.theta + self.phi)),(last_index_z - cap_theta-center_z))), float(center_z ))
-            print('A: ({a0:.2f},{a1:.2f}), C: ({c0:.2f},{c1:.2f})'.format(a0 = A[0], a1  =A[1], c0 = C[0], c1 = C[1])) 
+
             if direction_right:
-                line = np.linalg.solve(np.array([[A[0], 1],[C[0],1]]), np.array([A[1],C[1]]))
-                cap_mask = (x2y *line[0]+line[1]<x2z).type(torch.bool)
-                '''mask = torch.logical_and(mask, cap_mask)
-                print("Ellipse equation: (x-({y:+.2f}))^2/{r_theta:.2f}^2 +(y -({z:+.2f}))^2/{r_phi:.2f}^2<1, line equation: y = {a:.2f}x{b:+.2f}".
-                format(r_theta = float(r_theta), r_phi = float(r_phi),  y = float(center_y), z = float(center_z), a = line[0], b = line[1]))'''
-            else:
-                line = np.linalg.solve(np.array([[A[0], 1],[C[0],1]]), np.array([A[1],C[1]]))
-                cap_mask = (x2y *line[0]+line[1]<x2z).type(torch.bool)
+                A = (float(first_index_y + cap_phi), float(first_index_z+cap_theta))
+                if self.theta ==0:
+                    C =(float(first_index_y + cap_phi), float(last_index_z))
+                elif self.phi ==0:
+                    C = (float(last_index_y), float(first_index_z+cap_theta))
+                else:
+                    # maybe also +center
+                    C = (float(first_index_y + cap_phi - safe_multiplier(np.tan(np.deg2rad(self.theta + self.phi)),(first_index_z + cap_theta-center_z))), float(center_z ))
+                #print('A: ({a0:.2f},{a1:.2f}), C: ({c0:.2f},{c1:.2f})'.format(a0 = A[0], a1  =A[1], c0 = C[0], c1 = C[1])) 
+                try:
+                    line = np.linalg.solve(np.array([[A[0], 1],[C[0],1]]), np.array([A[1],C[1]]))
+                    cap_mask = (x2y *line[0]+line[1]>x2z).type(torch.bool)
+                    #print("Ellipse equation: (x-({y:+.2f}))^2/{r_phi:.2f}^2 +(y -({z:+.2f}))^2/{r_theta:.2f}^2<1, line equation: y > {a:.2f}x{b:+.2f}".format(r_theta = float(r_theta), r_phi = float(r_phi),  y = float(center_y), z = float(center_z), a = line[0], b = line[1]))
+                except np.linalg.LinAlgError: # for case theta = 0 the matrix is indeed singular and the line is vertical
+                    cap_mask = (x2y<A[0]).type(torch.bool)
+                    #print("Ellipse equation: (x-({y:+.2f}))^2/{r_phi:.2f}^2 +(y -({z:+.2f}))^2/{r_theta:.2f}^2<1, line equation: x < {x}".format(r_theta = float(r_theta), r_phi = float(r_phi),  y = float(center_y), z = float(center_z), x = A[0]))
+                mask = torch.logical_and(mask, cap_mask)
+                
+            else:            
+                A = (float(last_index_y - cap_phi), float(last_index_z-cap_theta))
+                if self.theta ==0:
+                    C =(float(last_index_y - cap_phi), float(first_index_z))
+                elif self.phi ==0:
+                    C = (float(last_index_y), float(last_index_z-cap_theta))
+                else:
+                    C = (float(last_index_y - cap_phi - safe_multiplier(np.tan(np.deg2rad(self.theta + self.phi)),(last_index_z - cap_theta-center_z))), float(center_z ))
+                #print('A: ({a0:.2f},{a1:.2f}), C: ({c0:.2f},{c1:.2f})'.format(a0 = A[0], a1  =A[1], c0 = C[0], c1 = C[1])) 
+                try:
+                    line = np.linalg.solve(np.array([[A[0], 1],[C[0],1]]), np.array([A[1],C[1]]))
+                    cap_mask = (x2y *line[0]+line[1]<x2z).type(torch.bool)
+                    #print("Ellipse equation: (x-({y:+.2f}))^2/{r_phi:.2f}^2 +(y -({z:+.2f}))^2/{r_theta:.2f}^2<1, line equation: y > {a:.2f}x{b:+.2f}".format(r_theta = float(r_theta), r_phi = float(r_phi),  y = float(center_y), z = float(center_z), a = line[0], b = line[1]))
+
+                except np.linalg.LinAlgError: # for case theta = 0 the matrix is indeed singular and the line is vertical
+                    cap_mask = (x2y>A[0]).type(torch.bool)
+                    #print("Ellipse equation: (x-({y:+.2f}))^2/{r_phi:.2f}^2 +(y -({z:+.2f}))^2/{r_theta:.2f}^2<1, line equation: x > {x}".format(r_theta = float(r_theta), r_phi = float(r_phi),  y = float(center_y), z = float(center_z), x = A[0]))
                 mask = torch.logical_and(mask, cap_mask)
 
-            #print("Ellipse equation: (x-({y:+.2f}))^2/{r_theta:.2f}^2 +(y -({z:+.2f}))^2/{r_phi:.2f}^2<1, line equation: y = {a:.2f}x{b:+.2f}".
-            #format(r_theta = float(r_theta), r_phi = float(r_phi),  y = float(center_y), z = float(center_z), a = line[0], b = line[1]))
         
         return mask, False
 
@@ -166,9 +187,10 @@ class Cylinder(Simulation):
         central_axis_cylinder_projection_on_x = safe_multiplier(height/2,np.cos(np.deg2rad(self.theta)),np.cos(np.deg2rad(self.phi)))//self.grid_space # projection of central cylinder axis on x-axis
         cylinder_rest_projection_on_x =  safe_multiplier(np.sin(np.deg2rad(self.theta)),np.sin(np.deg2rad(self.phi)),radius)//self.grid_space # projection of the rest of the cylinder after the central axis on x-axis
         cylinder_projection_on_x = math.ceil(central_axis_cylinder_projection_on_x+ cylinder_rest_projection_on_x) # projection of whole cylinder on x-axis
-        print(cylinder_projection_on_x, central_axis_cylinder_projection_on_x, cylinder_rest_projection_on_x)
+        #print(cylinder_projection_on_x, central_axis_cylinder_projection_on_x, cylinder_rest_projection_on_x)
         radius_at_theta = safe_dividend(radius,np.cos(np.deg2rad(self.theta))) # calculate the radius of ellipse at slice at both rotations
         radius_at_phi = safe_dividend(radius,np.cos(np.deg2rad(self.phi)))
+        #print('radius is {r:.2f}, r_phi is {r_phi:.2f} and r_theta is {r_theta:.2f}'.format(r = radius, r_phi = radius_at_phi, r_theta = radius_at_theta))
         # if central slice on grid:
         if len(self.grid[self.grid == center[0]])==1:
             central_slice = int(torch.argwhere(self.grid==center[0])[0,0])# start with the central slice
