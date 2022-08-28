@@ -44,6 +44,7 @@ class Cylinder(Simulation):
         self.theta = np.random.uniform(low = 0, high = 45)
         self.phi = np.random.uniform(low = 0, high = 45)
         
+        
         if self.rMean is None:
             self.rMean = -1
             while self.rMean<=0:
@@ -105,17 +106,16 @@ class Cylinder(Simulation):
         if capping:
             # calculate the distance from the center of cylinder to the capping plane on the cylinder axis - > dependent on both phi and theta
             d_cap = (height/2- safe_dividend(d,np.cos(np.deg2rad(self.theta)),np.cos(np.deg2rad(self.phi)))) 
-            cap_theta =  safe_dividend(d_cap, np.sin(np.deg2rad(self.theta)))
-            cap_phi =  safe_dividend(d_cap, np.sin(np.deg2rad(self.phi)))
+            c_theta =  safe_dividend(d_cap, np.sin(np.deg2rad(self.theta)))
+            c_phi =  safe_dividend(d_cap, np.sin(np.deg2rad(self.phi)))
             #print("r_phi is {r1:.2f} r theta is {r2:.2f}, cap at ({cap_phi:.2f},{cap_theta:.2f})".format(r2 = r_theta, r1 = r_phi,cap_theta = float(cap_theta), cap_phi = float(cap_phi)))
 
             # if d_cap positiv the cap is bigger than radius else, it's smaller, anyaway, because we then devide by the sinus 
             #if d_cap >0:
-            cap_theta = np.abs(float(r_theta+cap_theta)) if self.theta !=0 else 0
-            cap_phi = np.abs(float(r_phi+cap_phi)) if self.phi!=0 else 0
+            cap_theta = np.abs(float(r_theta+c_theta)) if self.theta !=0 else 0 # AS IN PAGE 2.1
+            cap_phi = np.abs(float(r_phi+c_phi)) if self.phi!=0 else 0
 
-            #else:
-            
+
             #print("cap recalculated ({cap_phi:.2f},{cap_theta:.2f})".format(cap_theta = float(cap_theta), cap_phi = float(cap_phi)))
             # point A is first on the line = (cap_phi, cap_theta) now figure out point 2
             # say, point B lies on cap_phi and on diameter of ellipse r_phi -> it has the coord (cap_phi, center_z) -> AB = center_z - cap_theta
@@ -136,15 +136,15 @@ class Cylinder(Simulation):
                     C = (float(last_index_y), float(first_index_z+cap_theta))
                 else:
                     # maybe also +center
-                    C = (float(first_index_y + cap_phi - safe_multiplier(np.tan(np.deg2rad(self.theta + self.phi)),(first_index_z + cap_theta-center_z))), float(center_z ))
-                #print('A: ({a0:.2f},{a1:.2f}), C: ({c0:.2f},{c1:.2f})'.format(a0 = A[0], a1  =A[1], c0 = C[0], c1 = C[1])) 
+                    C = (float(first_index_y + cap_phi - (safe_multiplier((first_index_z + cap_theta - (center_z)),np.tan(np.deg2rad(self.theta + self.phi))))), float(center_z ))
+                print('A: ({a0:.2f},{a1:.2f}), C: ({c0:.2f},{c1:.2f})'.format(a0 = A[0], a1  =A[1], c0 = C[0], c1 = C[1])) 
                 try:
                     line = np.linalg.solve(np.array([[A[0], 1],[C[0],1]]), np.array([A[1],C[1]]))
                     cap_mask = (x2y *line[0]+line[1]>x2z).type(torch.bool)
-                    #print("Ellipse equation: (x-({y:+.2f}))^2/{r_phi:.2f}^2 +(y -({z:+.2f}))^2/{r_theta:.2f}^2<1, line equation: y > {a:.2f}x{b:+.2f}".format(r_theta = float(r_theta), r_phi = float(r_phi),  y = float(center_y), z = float(center_z), a = line[0], b = line[1]))
+                    print("Ellipse equation: (x-({y:+.2f}))^2/{r_phi:.2f}^2 +(y -({z:+.2f}))^2/{r_theta:.2f}^2<1, line equation: y > {a:.2f}x{b:+.2f}".format(r_theta = float(r_theta), r_phi = float(r_phi),  y = float(center_y), z = float(center_z), a = line[0], b = line[1]))
                 except np.linalg.LinAlgError: # for case theta = 0 the matrix is indeed singular and the line is vertical
                     cap_mask = (x2y<A[0]).type(torch.bool)
-                    #print("Ellipse equation: (x-({y:+.2f}))^2/{r_phi:.2f}^2 +(y -({z:+.2f}))^2/{r_theta:.2f}^2<1, line equation: x < {x}".format(r_theta = float(r_theta), r_phi = float(r_phi),  y = float(center_y), z = float(center_z), x = A[0]))
+                    print("Ellipse equation: (x-({y:+.2f}))^2/{r_phi:.2f}^2 +(y -({z:+.2f}))^2/{r_theta:.2f}^2<1, line equation: x < {x}".format(r_theta = float(r_theta), r_phi = float(r_phi),  y = float(center_y), z = float(center_z), x = A[0]))
                 mask = torch.logical_and(mask, cap_mask)
                 
             else:            
@@ -154,12 +154,12 @@ class Cylinder(Simulation):
                 elif self.phi ==0:
                     C = (float(first_index_y), float(last_index_z-cap_theta))
                 else:
-                    C = (float(last_index_y - cap_phi - safe_multiplier(np.tan(np.deg2rad(self.theta + self.phi)),(last_index_z - cap_theta-center_z))), float(center_z ))
-                print('A: ({a0:.2f},{a1:.2f}), C: ({c0:.2f},{c1:.2f})'.format(a0 = A[0], a1  =A[1], c0 = C[0], c1 = C[1])) 
+                    C = (float(last_index_y - cap_phi + (safe_multiplier(last_index_z - cap_theta + (center_z),np.tan(np.deg2rad(self.theta + self.phi))))), float(center_z ))
+                print('A: ({a0:.2f},{a1:.2f}), C: ({c0:.2f},{c1:.2f})'.format(a0 = A[0], a1  =A[1], c0 = C[0], c1 = C[1]), cap_phi, cap_theta) 
                 try:
                     line = np.linalg.solve(np.array([[A[0], 1],[C[0],1]]), np.array([A[1],C[1]]))
                     cap_mask = (x2y *line[0]+line[1]<x2z).type(torch.bool)
-                    print("Ellipse equation: (x-({y:+.2f}))^2/{r_phi:.2f}^2 +(y -({z:+.2f}))^2/{r_theta:.2f}^2<1, line equation: y > {a:.2f}x{b:+.2f}".format(r_theta = float(r_theta), r_phi = float(r_phi),  y = float(center_y), z = float(center_z), a = line[0], b = line[1]))
+                    print("Ellipse equation: (x-({y:+.2f}))^2/{r_phi:.2f}^2 +(y -({z:+.2f}))^2/{r_theta:.2f}^2<1, line equation: y < {a:.2f}x{b:+.2f}".format(r_theta = float(r_theta), r_phi = float(r_phi),  y = float(center_y), z = float(center_z), a = line[0], b = line[1]))
 
                 except np.linalg.LinAlgError: # for case theta = 0 the matrix is indeed singular and the line is vertical
                     cap_mask = (x2y>A[0]).type(torch.bool)
