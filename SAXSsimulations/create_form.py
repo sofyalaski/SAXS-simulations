@@ -20,21 +20,32 @@ class Simulation:
         """ 
         Volume fraction as a proportion of non-zero voxels to all voxels in a box
         """
-        return int(self.box.sum())/self.nPoints**3
+        return int(self._box.sum())/self.nPoints**3
     
     @property
     def density(self):
         """
         Because the box might be changed at any moment density is the copy of it 
         """
-        return self.box
+        return self._box
 
     @property
     def FTI(self):
         """
         Set the Fourier transform variable to be the copy of the FT calulated the custom way
         """
-        return self.FTI_custom
+        return self._FTI_custom
+
+    @property
+    def FTI_sinc(self):
+        """
+        Set the sinc'ed FTI
+        """
+        if 'FTI_slice_custom' in dir(self):
+            return self.__sinc(self.FTI_slice_custom)
+        else:
+            return self.__sinc(self.FTI_custom)
+
 
     def __initialize_box(self):
         """
@@ -45,7 +56,7 @@ class Simulation:
         """
         self.grid = torch.linspace(-self.box_size /2 , self.box_size /2, self.nPoints) 
         self.__expand_Q()
-        self.box  = torch.zeros((self.nPoints,self.nPoints,self.nPoints), dtype = torch.float32)
+        self._box  = torch.zeros((self.nPoints,self.nPoints,self.nPoints), dtype = torch.float32)
         self.grid_space = self.box_size/(self.nPoints-1)
     
     def __expand_Q(self):
@@ -67,6 +78,12 @@ class Simulation:
 
 
     ################################   The Fourier Transformation functions   ################################
+
+
+    def pin_memory(self):
+        self.density.pin_memory()
+
+
     def calculate_torch_FTI_3D(self, device = 'cuda', slice = None):
         """
         Calculates Fourier transform of a 3D box with torch fftn and shifts to nyquist frequency
@@ -74,7 +91,7 @@ class Simulation:
             device: to use the GPU
             slice: if None, the central slice will be assigned to the attribute FTI_slice_torch
         """
-        density = self.density.type(torch.complex64).to(device)
+        density = self.density.to(device)
         FT = torch.fft.fftn(density, norm = 'forward')
         FT = torch.fft.fftshift(FT)
         FTI = torch.abs(FT)**2
@@ -87,7 +104,7 @@ class Simulation:
         """
         calculate the 3D FFT via 2D FFT and then the last 1D FFT
         """
-        FT = self.density.type(torch.complex64).to(device)
+        FT = self.density.type(torch.complex128).to(device)
         for k in range(FT.shape[0]):
             if FT[k,:,:].any():
                 FT[k,:,:] = torch.fft.fft2(FT[k,:,:], norm = 'forward')
@@ -97,7 +114,7 @@ class Simulation:
 
         FT = torch.fft.fftshift(FT)
         FTI = torch.abs(FT)**2
-        self.FTI_custom = FTI.cpu().detach().numpy()
+        self._FTI_custom = FTI.cpu().detach().numpy()
 
     def calculate_custom_FTI_3D_slice(self, device = 'cuda', slice = None):
         """
@@ -108,7 +125,7 @@ class Simulation:
         """
         if slice is None:
             slice = self.nPoints//2+1
-        FT = self.density.type(torch.complex64).to(device)
+        FT = self.density.type(torch.complex128).to(device)
         for i in range(FT.shape[1]):
             for j in range(FT.shape[2]):      
                 if FT[:,i,j].any():          
@@ -119,13 +136,13 @@ class Simulation:
         FTI = torch.abs(FT_slice)**2
         self.FTI_slice_custom = FTI.cpu().detach().numpy()
         
-    def sinc(self):
+    def __sinc(self, FTI):
         """
         Applies the sinc function to the voxel and multiplies the result with the Fourier Transformed Structure. New attribute is 
         created as a convolution of sinc'ed voxel with the Fourier Transform of the structure
-        """
-        q_lengthbox = float(self.Q[0,0,0])-float(self.Q[0,0,1])
-        self.FTI_sinc = self.FTI_slice_custom*np.sinc(q_lengthbox/np.pi)
+        """        
+        FTI_sinced = FTI * np.power(np.sinc(self.qx * self.grid_space/2/np.pi), 6)
+        return FTI_sinced
     
     ################################   The rebinnning functions   ################################
     

@@ -74,8 +74,8 @@ class Sphere(Simulation):
                 d = self.grid_space*i # calculate the distance grom the center to the slice
                 radius_at_d = torch.sqrt(radius**2-d**2) # calculate the radius of circle at slice using Pythagoras Theorem
                 circle_at_d = (x2x-center[1])**2 + (x2y-center[2])**2 < radius_at_d**2 # mask the circle location
-                self.box[central_slice+i,circle_at_d] = 1 # density inside sphere
-                self.box[central_slice-i,circle_at_d] = 1
+                self._box[central_slice+i,circle_at_d] = 1 # density inside sphere
+                self._box[central_slice-i,circle_at_d] = 1
         else:
             # if the center of the sphere in between of two grid points, find those points and do the same in both dierections
             nearest_bigger_ind = torch.argwhere(self.grid>center[0])[0,0]
@@ -86,8 +86,8 @@ class Sphere(Simulation):
                 radius_at_d2 = torch.sqrt(radius**2-d2**2)
                 circle_at_d1 = (x2x-center[1])**2 + (x2y-center[2])**2 < radius_at_d1**2
                 circle_at_d2 = (x2x-center[1])**2 + (x2y-center[2])**2 < radius_at_d2**2
-                self.box[nearest_bigger_ind+i,circle_at_d1] = 1
-                self.box[nearest_bigger_ind-1-i,circle_at_d2] = 1
+                self._box[nearest_bigger_ind+i,circle_at_d1] = 1
+                self._box[nearest_bigger_ind-1-i,circle_at_d2] = 1
 
     def save_data(self,  directory='.', for_SasView = True):
         """

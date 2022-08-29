@@ -43,7 +43,7 @@ class Cylinder(Simulation):
         """
         self.theta = np.random.uniform(low = 0, high = 45)
         self.phi = np.random.uniform(low = 0, high = 45)
-        
+    
         
         if self.rMean is None:
             self.rMean = -1
@@ -99,7 +99,6 @@ class Cylinder(Simulation):
         x2y = self.grid[None,:]
         x2z = self.grid[:,None]
         mask = ((x2y-center_y)**2/r_phi**2 + (x2z-center_z)**2/r_theta**2 <=1).type(torch.bool)
-        mask_sum = mask.sum()
         if check:
             if float(mask.sum()) ==0 or (mask[0,:] == True).any() or (mask[-1,:] == True).any() or (mask[:,0] == True).any() or (mask[:, -1] == True).any():
                 return torch.zeros_like(mask), True # check_failed
@@ -111,21 +110,19 @@ class Cylinder(Simulation):
             #print("r_phi is {r1:.2f} r theta is {r2:.2f}, cap at ({cap_phi:.2f},{cap_theta:.2f})".format(r2 = r_theta, r1 = r_phi,cap_theta = float(cap_theta), cap_phi = float(cap_phi)))
 
             # if d_cap positiv the cap is bigger than radius else, it's smaller, anyaway, because we then devide by the sinus 
-            #if d_cap >0:
             cap_theta = np.abs(float(r_theta+c_theta)) if self.theta !=0 else 0 # AS IN PAGE 2.1
             cap_phi = np.abs(float(r_phi+c_phi)) if self.phi!=0 else 0
 
 
-            #print("cap recalculated ({cap_phi:.2f},{cap_theta:.2f})".format(cap_theta = float(cap_theta), cap_phi = float(cap_phi)))
             # point A is first on the line = (cap_phi, cap_theta) now figure out point 2
             # say, point B lies on cap_phi and on diameter of ellipse r_phi -> it has the coord (cap_phi, center_z) -> AB = center_z - cap_theta
             #second point on the line is through triangle ABC, C outside of the ellipse, perp to AB: tan (theta) = BC/AB -> 
             # coordinates of C =(cap_phi - tan(theta)*(center_z - cap_theta), center_z)
             #isn't there a mix up in phi and theta?
-            first_index_y = center_y - r_phi #int(torch.argwhere(mask.any(axis=0))[0][0])
-            last_index_y = center_y + r_phi # int(torch.argwhere(mask.any(axis=0))[0][-1])
-            first_index_z = center_z - r_theta # int(torch.argwhere(mask.any(axis=1))[0][0])
-            last_index_z = center_z + r_theta #int(torch.argwhere(mask.any(axis=1))[0][-1])
+            first_index_y = center_y - r_phi 
+            last_index_y = center_y + r_phi 
+            first_index_z = center_z - r_theta 
+            last_index_z = center_z + r_theta 
             #print('f_y:({f_y:.2f},{c_z:.2f}), l_y:({l_y:.2f},{c_z:.2f}), f_z:({c_y:.2f},{f_z:.2f}), l_z:({c_y:.2f},{l_z:.2f})'.format(f_y = first_index_y, f_z = first_index_z, l_y = last_index_y, l_z  =last_index_z, c_y = center_y, c_z = center_z))
 
             if direction_right:
@@ -135,13 +132,17 @@ class Cylinder(Simulation):
                 elif self.phi ==0:
                     C = (float(last_index_y), float(first_index_z+cap_theta))
                 else:
-                    # maybe also +center
                     C = (float(first_index_y + cap_phi - (safe_multiplier((first_index_z + cap_theta - (center_z)),np.tan(np.deg2rad(self.theta + self.phi))))), float(center_z ))
                 print('A: ({a0:.2f},{a1:.2f}), C: ({c0:.2f},{c1:.2f})'.format(a0 = A[0], a1  =A[1], c0 = C[0], c1 = C[1])) 
                 try:
-                    line = np.linalg.solve(np.array([[A[0], 1],[C[0],1]]), np.array([A[1],C[1]]))
-                    cap_mask = (x2y *line[0]+line[1]>x2z).type(torch.bool)
-                    print("Ellipse equation: (x-({y:+.2f}))^2/{r_phi:.2f}^2 +(y -({z:+.2f}))^2/{r_theta:.2f}^2<1, line equation: y > {a:.2f}x{b:+.2f}".format(r_theta = float(r_theta), r_phi = float(r_phi),  y = float(center_y), z = float(center_z), a = line[0], b = line[1]))
+                    if self._line_stepwise_right:
+                        self._line_right = np.array([self._line_right[0], A[1] - self._line_right[0]* A[0] ])
+                    else:
+                        self._line_right = np.linalg.solve(np.array([[A[0], 1],[C[0],1]]), np.array([A[1],C[1]]))
+                        self._line_stepwise_right = True
+                    print(self._line_right)
+                    cap_mask = (x2y *self._line_right[0]+self._line_right[1]>x2z).type(torch.bool)
+                    print("Ellipse equation: (x-({y:+.2f}))^2/{r_phi:.2f}^2 +(y -({z:+.2f}))^2/{r_theta:.2f}^2<1, line equation: y > {a:.2f}x{b:+.2f}".format(r_theta = float(r_theta), r_phi = float(r_phi),  y = float(center_y), z = float(center_z), a = self._line_right[0], b = self._line_right[1]))
                 except np.linalg.LinAlgError: # for case theta = 0 the matrix is indeed singular and the line is vertical
                     cap_mask = (x2y<A[0]).type(torch.bool)
                     print("Ellipse equation: (x-({y:+.2f}))^2/{r_phi:.2f}^2 +(y -({z:+.2f}))^2/{r_theta:.2f}^2<1, line equation: x < {x}".format(r_theta = float(r_theta), r_phi = float(r_phi),  y = float(center_y), z = float(center_z), x = A[0]))
@@ -157,9 +158,10 @@ class Cylinder(Simulation):
                     C = (float(last_index_y - cap_phi + (safe_multiplier(last_index_z - cap_theta + (center_z),np.tan(np.deg2rad(self.theta + self.phi))))), float(center_z ))
                 print('A: ({a0:.2f},{a1:.2f}), C: ({c0:.2f},{c1:.2f})'.format(a0 = A[0], a1  =A[1], c0 = C[0], c1 = C[1]), cap_phi, cap_theta) 
                 try:
-                    line = np.linalg.solve(np.array([[A[0], 1],[C[0],1]]), np.array([A[1],C[1]]))
-                    cap_mask = (x2y *line[0]+line[1]<x2z).type(torch.bool)
-                    print("Ellipse equation: (x-({y:+.2f}))^2/{r_phi:.2f}^2 +(y -({z:+.2f}))^2/{r_theta:.2f}^2<1, line equation: y < {a:.2f}x{b:+.2f}".format(r_theta = float(r_theta), r_phi = float(r_phi),  y = float(center_y), z = float(center_z), a = line[0], b = line[1]))
+                    
+                    self._line_left = np.array([self._line_right[0], A[1] - self._line_right[0]* A[0] ])
+                    cap_mask = (x2y *self._line_left[0]+self._line_left[1]<x2z).type(torch.bool)
+                    print("Ellipse equation: (x-({y:+.2f}))^2/{r_phi:.2f}^2 +(y -({z:+.2f}))^2/{r_theta:.2f}^2<1, line equation: y < {a:.2f}x{b:+.2f}".format(r_theta = float(r_theta), r_phi = float(r_phi),  y = float(center_y), z = float(center_z), a = self._line_left[0], b = self._line_left[1]))
 
                 except np.linalg.LinAlgError: # for case theta = 0 the matrix is indeed singular and the line is vertical
                     cap_mask = (x2y>A[0]).type(torch.bool)
@@ -187,11 +189,13 @@ class Cylinder(Simulation):
         #print(cylinder_projection_on_x, central_axis_cylinder_projection_on_x, cylinder_rest_projection_on_x)
         radius_at_theta = safe_dividend(radius,np.cos(np.deg2rad(self.theta))) # calculate the radius of ellipse at slice at both rotations
         radius_at_phi = safe_dividend(radius,np.cos(np.deg2rad(self.phi)))
+        self._line_stepwise_right = False
+        self._line_stepwise_left = False
         #print('radius is {r:.2f}, r_phi is {r_phi:.2f} and r_theta is {r_theta:.2f}'.format(r = radius, r_phi = radius_at_phi, r_theta = radius_at_theta))
         # if central slice on grid:
         if len(self.grid[self.grid == center[0]])==1:
             central_slice = int(torch.argwhere(self.grid==center[0])[0,0])# start with the central slice
-            if central_slice+cylinder_projection_on_x >self.box.shape[0] or central_slice-cylinder_projection_on_x <0:
+            if central_slice+cylinder_projection_on_x >self._box.shape[0] or central_slice-cylinder_projection_on_x <0:
                 #print('--->outside of x plane')
                 return False
             # check if circles at the ends of cylinder are inside the box  
@@ -208,14 +212,14 @@ class Cylinder(Simulation):
                 d = self.grid_space*i # calculate the distance grom the center to the slice
                 capping = i> central_axis_cylinder_projection_on_x-cylinder_rest_projection_on_x 
                 mask,_ =self.__create_slice(height, radius_at_theta,radius_at_phi, center, d, capping, direction_right = True, check = False)
-                self.box[central_slice+i,mask] = 1 # density inside cylinder
+                self._box[central_slice+i,mask] = 1 # density inside cylinder
                 mask,_ = self.__create_slice(height, radius_at_theta,radius_at_phi, center, d, capping, direction_right = False, check = False)
-                self.box[central_slice-i,mask] = 1
+                self._box[central_slice-i,mask] = 1
 
         else:
             # if the center of the cylinder in between of two grid points, find those points and do the same in both dierections
             nearest_bigger_ind = int(torch.argwhere(self.grid>center[0])[0,0])
-            if nearest_bigger_ind+cylinder_projection_on_x >self.box.shape[0] or nearest_bigger_ind-1-cylinder_projection_on_x <0:
+            if nearest_bigger_ind+cylinder_projection_on_x >self._box.shape[0] or nearest_bigger_ind-1-cylinder_projection_on_x <0:
                 #print('--->outside of x plane')
                 return  False
             # check if circles at the ends of cylinder are inside the box  
@@ -232,10 +236,10 @@ class Cylinder(Simulation):
                 d1 = self.grid_space*i + self.grid[nearest_bigger_ind]-center[0]
                 capping = i> central_axis_cylinder_projection_on_x-cylinder_rest_projection_on_x 
                 mask,_ = self.__create_slice(height, radius_at_theta,radius_at_phi, center, d1, capping, direction_right = True, check = False)
-                self.box[nearest_bigger_ind+i,mask] = 1 # density inside cylinder
+                self._box[nearest_bigger_ind+i,mask] = 1 # density inside cylinder
                 d2 = self.grid_space*i + center[0] - self.grid[nearest_bigger_ind-1]
                 mask,_ = self.__create_slice(height, radius_at_theta,radius_at_phi, center, d2, capping, direction_right = False, check = False)
-                self.box[nearest_bigger_ind-1-i,mask] = 1
+                self._box[nearest_bigger_ind-1-i,mask] = 1
         return True
 
     def save_data(self,  directory='.', for_SasView = True):
