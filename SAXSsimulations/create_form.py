@@ -1,3 +1,4 @@
+from xml.dom.minidom import getDOMImplementation
 import numpy as np
 import pandas as pd
 import torch
@@ -69,12 +70,14 @@ class Simulation:
         self.qx = torch.linspace(-torch.pi/divLength, torch.pi/divLength, self.nPoints)
         #qy = qx.clone()
         #qz = qx.clone()
+        self._q2y = self.qx[None,:]
+        self._q2z = self.qx[:,None]
 
-        q3x = self.qx + 0 * self.qx[None,:,None] + 0 * self.qx[:,None,None]
-        q3y = 0 * self.qx + self.qx[None,:,None] + 0 * self.qx[:,None,None]
-        q3z = 0 * self.qx + 0 * self.qx[None,:,None] + self.qx[:,None,None]
+        self._q3x = self.qx + 0 * self.qx[None,:,None] + 0 * self.qx[:,None,None]
+        self._q3y = 0 * self.qx + self.qx[None,:,None] + 0 * self.qx[:,None,None]
+        self._q3z = 0 * self.qx + 0 * self.qx[None,:,None] + self.qx[:,None,None]
 
-        self.Q = torch.sqrt(q3x**2 + q3y**2 + q3z**2)
+        self.Q = torch.sqrt(self._q3x**2 + self._q3y**2 + self._q3z**2)
 
 
     ################################   The Fourier Transformation functions   ################################
@@ -140,8 +143,12 @@ class Simulation:
         """
         Applies the sinc function to the voxel and multiplies the result with the Fourier Transformed Structure. New attribute is 
         created as a convolution of sinc'ed voxel with the Fourier Transform of the structure
-        """        
-        FTI_sinced = FTI * np.power(np.sinc(self.qx * self.grid_space/2/np.pi), 6)
+        """    
+        if len(FTI.shape)==2:
+            self.sinc = np.abs(np.sinc(self._q2y*self.grid_space/2/np.pi)*np.sinc(self._q2z*self.grid_space/2/np.pi))**2
+        else:
+            self.sinc = np.abs(np.sinc(self._q3x*self.grid_space/2/np.pi)*np.sinc(self._q3y*self.grid_space/2/np.pi)**np.sinc(self._q3z*self.grid_space/2/np.pi))**2
+        FTI_sinced = FTI * self.sinc
         return FTI_sinced
     
     ################################   The rebinnning functions   ################################
@@ -222,6 +229,42 @@ class Simulation:
         binned_data.dropna(thresh=4, inplace=True)
         return binned_data[['Q', 'I', 'IStd', 'ISEM', 'IError', 'ISigma', 'QStd', 'QSEM', 'QSigma']]
 
+    def __mask_FT_to_sphere(self):
+        x2x = self.grid[None,:]
+        x2y = self.grid[:,None]
+        radius = self.box_size//2
+        if len(self.FTI_sinc.shape)==2:
+            mask = (x2x)**2 + (x2y)**2 < radius**2 # center = 0
+            self.FTI_sinc_flatten = self.FTI_sinc[mask.to(torch.bool)]
+            self.Q_flatten = self.Q[self.nPoints//2+1,:,:][mask.to(torch.bool)]
+            print(self.Q_flatten.shape, self.FTI_sinc_flatten.shape)
+        else:
+            Q_sphere = Simulation(self.box_size, self.nPoints)
+            if len(Q_sphere.grid[Q_sphere.grid == 0])==1:
+                central_slice = torch.argwhere(Q_sphere.grid==0)[0,0] # start with the central slice
+                for i in range(int(radius//Q_sphere.grid_space)): # last grid point fully covering the radius is considered , sphere is symmetric so work in both directions
+                    d = Q_sphere.grid_space*i # calculate the distance grom the center to the slice
+                    radius_at_d = torch.sqrt(radius**2-d**2) # calculate the radius of circle at slice using Pythagoras Theorem
+                    circle_at_d = (x2x)**2 + (x2y)**2 < radius_at_d**2 # mask the circle location
+                    Q_sphere._box[central_slice+i,circle_at_d] = 1 # density inside sphere
+                    Q_sphere._box[central_slice-i,circle_at_d] = 1
+            else:
+                # if the center of the sphere in between of two grid points, find those points and do the same in both dierections
+                nearest_bigger_ind = torch.argwhere(Q_sphere.grid>0)[0,0]
+                for i in range(int(radius//self.grid_space)): # last grid point fully covering the radius is considered  
+                    d1 = self.grid_space*i  - self.grid[nearest_bigger_ind-1]
+                    d2 = self.grid_space*i + self.grid[nearest_bigger_ind]
+                    radius_at_d1 = torch.sqrt(radius**2-d1**2)
+                    radius_at_d2 = torch.sqrt(radius**2-d2**2)
+                    circle_at_d1 = (x2x)**2 + (x2y)**2 < radius_at_d1**2
+                    circle_at_d2 = (x2x)**2 + (x2y)**2 < radius_at_d2**2
+                    Q_sphere._box[nearest_bigger_ind+i,circle_at_d1] = 1
+                    Q_sphere._box[nearest_bigger_ind-1-i,circle_at_d2] = 1
+            
+            self.FTI_sinc_flatten = self.FTI_sinc[Q_sphere.density.to(torch.bool)]
+            self.Q_flatten = self.Q[Q_sphere.density.to(torch.bool)]
+
+
     def reBin(self, nbins, IEMin=0.01, QEMin=0.01, slice = 'center'):
         """
         Unweighted rebinning funcionality with extended uncertainty estimation, adapted from the datamerge methods,
@@ -238,8 +281,9 @@ class Simulation:
             binned_data: pandas.DataFrame with the values of intensity I and scattering angle Q rebinned 
             in specified intervals and other calculated statistics on it
         """
-        qMin = float(self.Q[self.Q!=0].min())
-        qMax = float(self.Q.max())
+        self.__mask_FT_to_sphere() # mask the Q to the sphere
+        qMin = float(self.Q_flatten[self.Q_flatten!=0].min())
+        qMax = float(self.Q_flatten.max())
 
         # prepare bin edges:
         binEdges = np.logspace(np.log10(qMin ), np.log10(qMax), num=nbins + 1)
@@ -249,11 +293,11 @@ class Simulation:
         if slice is not None:
             if slice=='center':
                 slice = self.nPoints//2+1
-            elif slice<0 or slice > (self.nPoints-1):
-                raise IndexError('Desired slice is out of boundaries of the simulation box')
-            df = pd.DataFrame({'Q':self.Q[slice,:,:].flatten(), 
-                            'I':self.FTI_sinc[:,:].flatten(), 
-                            'ISigma':0.01 * self.FTI_sinc[:,:].flatten()})
+            else:
+                raise IndexError('Only rebins the central slice or the whole box')
+            df = pd.DataFrame({'Q':self.Q_flatten, 
+                            'I':self.FTI_sinc_flatten, 
+                            'ISigma':0.01 * self.FTI_sinc_flatten})
             self.binned_slice = self.__reBinSlice(df, binEdges, IEMin=0.01, QEMin=0.01)
             
         else:
@@ -261,7 +305,7 @@ class Simulation:
             binned_slices = pd.DataFrame()
             for nSlice in range(self.FTI_sinc.shape[0]):
                 df = pd.DataFrame({'Q':self.Q[nSlice,:,:].flatten(), 
-                                'I':self.FTI_sinc[nSlice,:,:].flatten(), 
+                                'I':self.FTI_sinc[nSlice,:,:].flatten(),
                                 'ISigma':0.01 * self.FTI_sinc[nSlice,:,:].flatten()})
                 binned_slices = pd.concat([binned_slices, self.__reBinSlice(df, binEdges, IEMin=0.01, QEMin=0.01)], axis=0) 
 

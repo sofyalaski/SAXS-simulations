@@ -43,7 +43,7 @@ class Cylinder(Simulation):
         """
         self.theta = np.random.uniform(low = 0, high = 45)
         self.phi = np.random.uniform(low = 0, high = 45)
-    
+        self.phi=0
         
         if self.rMean is None:
             self.rMean = -1
@@ -132,7 +132,7 @@ class Cylinder(Simulation):
                 elif self.phi ==0:
                     C = (float(last_index_y), float(first_index_z+cap_theta))
                 else:
-                    C = (float(first_index_y + cap_phi - (safe_multiplier((first_index_z + cap_theta - (center_z)),np.tan(np.deg2rad(self.theta + self.phi))))), float(center_z ))
+                    C = (float(first_index_y + cap_phi - np.abs(safe_multiplier((np.abs(first_index_z + cap_theta - center_z)),np.tan(np.deg2rad( self.theta+self.phi))))), float(center_z ))
                 print('A: ({a0:.2f},{a1:.2f}), C: ({c0:.2f},{c1:.2f})'.format(a0 = A[0], a1  =A[1], c0 = C[0], c1 = C[1])) 
                 try:
                     if self._line_stepwise_right:
