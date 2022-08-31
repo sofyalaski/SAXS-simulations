@@ -1,4 +1,5 @@
 import numpy as np
+import itertools
 import torch
 import matplotlib.pyplot as plt
 import math
@@ -43,7 +44,6 @@ class Cylinder(Simulation):
         """
         self.theta = np.random.uniform(low = 0, high = 45)
         self.phi = np.random.uniform(low = 0, high = 45)
-        self.phi=0
         
         if self.rMean is None:
             self.rMean = -1
@@ -63,12 +63,13 @@ class Cylinder(Simulation):
                     continue # center was passed and is inside box
                 else:
                     self.center = np.random.uniform(low = -self.box_size/2 + self.rMean, high = self.box_size/2 - self.rMean, size = 3)
-                success = self.__generate_cylinder(self.rMean, self.hMean, self.center)
+                self.__generate_cylinder(self.rMean, self.hMean, self.center, self.theta, self.phi)
+                success = self.pbc
                 if success ==False:
                     self.center = None
                 attempt==1
-            print('volume fraction is {vf:.5f}, height is {h:.2f}, radius is {r:.2f}, center at ({cx:.1f},{cy:.1f},{cz:.1f}) '
-                .format(vf = self.volume_fraction, h = self.hMean, r = self.rMean, cx=self.center[0], cy = self.center[1], cz = self.center[2]))
+            print('volume fraction is {vf:.5f}, height is {h:.2f}, radius is {r:.2f}, center at ({cx:.1f},{cy:.1f},{cz:.1f}), rotation phi is {phi:.1f}, rotation theta is {theta:.1f} '
+                .format(vf = self.volume_fraction, h = self.hMean, r = self.rMean, cx=self.center[0], cy = self.center[1], cz = self.center[2], phi = self.phi, theta = self.theta))
         else:
             while self.volume_fraction<self.volume_fraction_threshold and attempt <100:
                 success = False
@@ -76,15 +77,82 @@ class Cylinder(Simulation):
                     height = np.random.normal(loc = self.hMean, scale= self.hWidth)
                     radius = np.random.normal(loc = self.rMean, scale= self.rWidth )
                     center = np.random.uniform(low = -self.box_size/2, high = self.box_size/2, size = 3)
+                    theta = np.random.normal(loc = self.theta, scale= 3 ) # VARIATION IS 3 DEGREES
+                    phi = np.random.normal(loc = self.phi, scale= 3 ) 
                     if ((center >self.box_size/2)|(center<-self.box_size/2) == True).any() or (radius <0) or (height <0):
                         continue # center is outside of box or radius or height is negatibve
-                    success = self.__generate_cylinder(radius, height, center)
+                    self.__generate_cylinder(radius, height, center, theta, phi)
+                    success = self.pbc
                     if success:
-                        print('volume fraction is {vf:.5f}, height is {h:.3f}, radius is {r:.3f}, center at ({cx:.1f},{cy:.1f},{cz:.1f}) '
-                        .format(vf = self.volume_fraction, h = height, r = radius, cx=center[0], cy = center[1], cz = center[2]))
+                        print('volume fraction is {vf:.5f}, height is {h:.3f}, radius is {r:.3f}, center at ({cx:.1f},{cy:.1f},{cz:.1f}), rotation phi is {phi:.1f}, rotation theta is {theta:.1f} '
+                        .format(vf = self.volume_fraction, h = height, r = radius, cx=center[0], cy = center[1], cz = center[2], phi = phi, theta = theta))
                     attempt==1
 
-    
+    def __points_in_cylinder(self, pt1, pt2, r, q):
+        vec = pt2 - pt1
+        const = r * np.linalg.norm(vec)
+        return np.array((np.dot(q - pt1, vec) >= 0) * (np.dot(q - pt2, vec) <= 0) *(np.linalg.norm(np.cross(q - pt1, vec), axis=1) <= const), dtype=float)
+
+    def __edge_pbc(self,pt1, pt2, r, edge_current):
+        edge_plane = np.vstack(np.meshgrid(edge_current[0], edge_current[1], edge_current[2])).reshape(3,-1).T
+        edge_density = self.__points_in_cylinder(pt1, pt2, r, edge_plane)
+        if edge_density.sum()>0: #the edge of the box will contain a density of a cylinder: pbc will not hold!
+            self.pbc = False
+
+            
+
+    def __cylinder_pbc(self, pt1, pt2, r ):
+        self.pbc = True
+        edge = [self.grid,self.grid,self.grid]
+        for d in range(3):
+            edge_current = edge.copy()
+            edge_current[d] = float(self.grid.min())
+            self.__edge_pbc(pt1,pt2,r,edge_current)
+            if not self.pbc:
+                break
+            edge_current[d] = float(self.grid.max())
+            self.__edge_pbc(pt1,pt2,r,edge_current)
+            if not self.pbc:
+                break
+
+            
+
+    def __generate_cylinder(self, radius, height, center, theta, phi):
+        
+        coords = np.array(np.meshgrid(self.grid, self.grid, self.grid))
+        coordsArr = np.vstack(coords).reshape(3,-1).T
+        
+        cylinder_end = [center[0]+np.abs(np.abs(np.cos(np.deg2rad(theta))*height)*np.sin(np.deg2rad(phi))), center[1]+np.abs(np.abs(np.cos(np.deg2rad(theta))*height)*np.cos(np.deg2rad(phi))), center[2]+np.abs(np.sin(np.deg2rad(theta))*height)]
+        self.__cylinder_pbc(center, cylinder_end, radius)
+        if self.pbc:
+            cylinder = self.__points_in_cylinder(pt1 = center, pt2 = np.array(cylinder_end), r=radius, q=coordsArr)
+            cylinder = np.array(cylinder).reshape(self.nPoints, self.nPoints, self.nPoints)
+            self._box = np.logical_or(self._box, torch.from_numpy(cylinder).to(torch.bool))
+
+    def save_data(self,  directory='.', for_SasView = True):
+        """
+        Saves .dat file. If slice  of 3D Fourier Transform was created only, operates on that slice, otherwise on whole data.
+        input:
+            directory to save
+            for_SasView: boolean, if True converts Q and I to SASView compartible values: Armstrong^-1 for Q and (m*sr)^-1.
+        """
+        if 'binned_slice' in dir(self):
+            data = self.binned_slice
+        else:
+            data = self.binned_data
+
+        if for_SasView:
+            data.assign(Q = data.Q/10, I = data.I/100, ISigma = data.ISigma/100).to_csv(directory+'/polydispersed_cylinders_{r}_{h}.dat'.
+            format(r = int(self.rMean*1000), h = int(self.hMean*1000)), header=None, index=None, columns=["Q", "I", "ISigma"])
+        else:
+            data.to_csv(directory+'/polydispersed_cylinders_{r}_{h}.dat'.
+            format(r = int(self.rMean*1000), h = int(self.hMean*1000)), header=None, index=None, columns=["Q", "I", "ISigma"])
+
+
+
+'''
+
+
     def __create_slice(self, height, r_theta,r_phi, center, d, capping, direction_right, check):
         """
         FIXME description
@@ -241,23 +309,5 @@ class Cylinder(Simulation):
                 mask,_ = self.__create_slice(height, radius_at_theta,radius_at_phi, center, d2, capping, direction_right = False, check = False)
                 self._box[nearest_bigger_ind-1-i,mask] = 1
         return True
-
-    def save_data(self,  directory='.', for_SasView = True):
-        """
-        Saves .dat file. If slice  of 3D Fourier Transform was created only, operates on that slice, otherwise on whole data.
-        input:
-            directory to save
-            for_SasView: boolean, if True converts Q and I to SASView compartible values: Armstrong^-1 for Q and (m*sr)^-1.
-        """
-        if 'binned_slice' in dir(self):
-            data = self.binned_slice
-        else:
-            data = self.binned_data
-
-        if for_SasView:
-            data.assign(Q = data.Q/10, I = data.I/100, ISigma = data.ISigma/100).to_csv(directory+'/polydispersed_cylinders_{r}_{h}.dat'.
-            format(r = int(self.rMean*1000), h = int(self.hMean*1000)), header=None, index=None, columns=["Q", "I", "ISigma"])
-        else:
-            data.to_csv(directory+'/polydispersed_cylinders_{r}_{h}.dat'.
-            format(r = int(self.rMean*1000), h = int(self.hMean*1000)), header=None, index=None, columns=["Q", "I", "ISigma"])
-
+        
+        '''
