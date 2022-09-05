@@ -237,7 +237,6 @@ class Simulation:
             mask = (x2x)**2 + (x2y)**2 < radius**2 # center = 0
             self.FTI_sinc_flatten = self.FTI_sinc[mask.to(torch.bool)]
             self.Q_flatten = self.Q[self.nPoints//2+1,:,:][mask.to(torch.bool)]
-            print(self.Q_flatten.shape, self.FTI_sinc_flatten.shape)
         else:
             Q_sphere = Simulation(self.box_size, self.nPoints)
             if len(Q_sphere.grid[Q_sphere.grid == 0])==1:
@@ -372,9 +371,13 @@ class Simulation:
                 'length': self.hMean, 
                 'length_pd': self.hWidth, 
                 'length_pd_type': 'gaussian', 
-                'length_pd_n': 35, 
-                'theta': self.theta,
-                'phi': self.phi
+                'length_pd_n': 35,              
+                'theta_pd': self.rotWidth,
+                'theta_pd_type':'gaussian',
+                'theta_pd_n':20,
+                'phi_pd': self.rotWidth,
+                'phi_pd_type':'gaussian',
+                'phi_pd_n':20
                 })
         self.__create_sas_model()
                 
@@ -398,3 +401,7 @@ class Simulation:
         self.Intensity_2D_sas = sasmodels.direct_model.call_kernel(kernel, self.modelParameters_sas)
         self.Intensity_2D_sas = self.Intensity_2D_sas.reshape(kansas)
         self.model.release()
+
+    def __Chi_squared_norm(self, uncertainty):
+        chi_squared = ((self.I_sas - self.binned_slice['I'])**2/self.binned_slice[uncertainty]**2).sum() 
+        return chi_squared / (len(self.I_sas) - 1)

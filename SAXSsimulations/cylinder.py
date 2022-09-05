@@ -16,6 +16,7 @@ class Cylinder(Simulation):
         self.rMean = None
         self.center = None  
         self.shape = 'cylinder'
+        self.rotWidth = 3 # VARIATION IS 3 DEGREES
 
     def place_shape(self, single = False, **kwargs):
         """
@@ -42,8 +43,12 @@ class Cylinder(Simulation):
         input:
             single[boolean] : create a single sphere in a box?        
         """
-        self.theta = np.random.uniform(low = 0, high = 45)
-        self.phi = np.random.uniform(low = 0, high = 45)
+        self.theta = np.random.uniform(low = -90, high = 90)
+        self.phi = np.random.uniform(low = -90, high = 90)
+        if np.random.randint(2)==0:
+            self.theta = np.random.choice([-90,0,90])
+        else:
+            self.phi= np.random.choice([-90,0,90])
         
         if self.rMean is None:
             self.rMean = -1
@@ -54,7 +59,7 @@ class Cylinder(Simulation):
         if self.hMean is None:
             self.hMean = -1
             while self.hMean<=0:
-                self.hMean = np.random.normal(loc = self.box_size*0.65, scale= self.box_size*0.1 )
+                self.hMean = np.random.normal(loc = self.box_size*0.4, scale= self.box_size*0.1 )
         attempt = 0
         if single:
             success = False
@@ -77,8 +82,13 @@ class Cylinder(Simulation):
                     height = np.random.normal(loc = self.hMean, scale= self.hWidth)
                     radius = np.random.normal(loc = self.rMean, scale= self.rWidth )
                     center = np.random.uniform(low = -self.box_size/2, high = self.box_size/2, size = 3)
-                    theta = np.random.normal(loc = self.theta, scale= 3 ) # VARIATION IS 3 DEGREES
-                    phi = np.random.normal(loc = self.phi, scale= 3 ) 
+                    if self.theta in [-90, 0, 90]:
+                        theta = np.random.normal(loc = self.theta, scale= self.rotWidth ) 
+                        phi = np.random.uniform(low = -90, high = 90)
+                    elif self.phi in [-90,0,90]:
+                        theta = np.random.uniform(low = -90, high = 90)
+                        phi = np.random.normal(loc = self.phi, scale= self.rotWidth )
+
                     if ((center >self.box_size/2)|(center<-self.box_size/2) == True).any() or (radius <0) or (height <0):
                         continue # center is outside of box or radius or height is negatibve
                     self.__generate_cylinder(radius, height, center, theta, phi)
@@ -129,7 +139,7 @@ class Cylinder(Simulation):
             cylinder = np.array(cylinder).reshape(self.nPoints, self.nPoints, self.nPoints)
             self._box = np.logical_or(self._box, torch.from_numpy(cylinder).to(torch.bool))
 
-    def save_data(self,  directory='.', for_SasView = True):
+    def save_data(self, uncertainty = "ISigma", directory='.', for_SasView = True):
         """
         Saves .dat file. If slice  of 3D Fourier Transform was created only, operates on that slice, otherwise on whole data.
         input:
@@ -143,10 +153,10 @@ class Cylinder(Simulation):
 
         if for_SasView:
             data.assign(Q = data.Q/10, I = data.I/100, ISigma = data.ISigma/100).to_csv(directory+'/polydispersed_cylinders_{r}_{h}.dat'.
-            format(r = int(self.rMean*1000), h = int(self.hMean*1000)), header=None, index=None, columns=["Q", "I", "ISigma"])
+            format(r = int(self.rMean*1000), h = int(self.hMean*1000)), header=None, index=None, columns=["Q", "I", uncertainty])
         else:
             data.to_csv(directory+'/polydispersed_cylinders_{r}_{h}.dat'.
-            format(r = int(self.rMean*1000), h = int(self.hMean*1000)), header=None, index=None, columns=["Q", "I", "ISigma"])
+            format(r = int(self.rMean*1000), h = int(self.hMean*1000)), header=None, index=None, columns=["Q", "I", uncertainty])
 
 
 

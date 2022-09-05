@@ -52,7 +52,7 @@ class Sphere(Simulation):
                 center = np.random.uniform(low = -self.box_size/2 + radius, high = self.box_size/2 - radius, size = 3)
                 self.__generate_sphere(radius, center)
                 print('volume fraction is {vf:.5f}, radius is {r:.2f}, center at ({cx:.1f},{cy:.1f},{cz:.1f}) '
-                        .format(vf = self.volume_fraction, r = self.rMean, cx=center[0], cy = center[1], cz = center[2]))
+                        .format(vf = self.volume_fraction, r = radius, cx=center[0], cy = center[1], cz = center[2]))
 
             
     def __generate_sphere(self, radius, center):
@@ -89,7 +89,7 @@ class Sphere(Simulation):
                 self._box[nearest_bigger_ind+i,circle_at_d1] = 1
                 self._box[nearest_bigger_ind-1-i,circle_at_d2] = 1
 
-    def save_data(self,  directory='.', for_SasView = True):
+    def save_data(self, uncertainty = "ISigma", directory='.', for_SasView = True):
         """
         Saves .dat file. If slice  of 3D Fourier Transform was created only, operates on that slice, otherwise on whole data.
         input:
@@ -103,7 +103,7 @@ class Sphere(Simulation):
 
         if for_SasView:
             data.assign(Q = data.Q/10, I = data.I/100, ISigma = data.ISigma/100).to_csv(directory+'/polydispersed_spheres_{r}.dat'.
-            format(r = int(self.rMean*1000)), header=None, index=None, columns=["Q", "I", "ISigma"])
+            format(r = int(self.rMean*1000)), header=None, index=None, columns=["Q", "I", uncertainty])
         else:
             data.to_csv(directory+'/polydispersed_spheres_{r}.dat'.
-            format(r = int(self.rMean*1000)), header=None, index=None, columns=["Q", "I", "ISigma"])
+            format(r = int(self.rMean*1000)), header=None, index=None, columns=["Q", "I", uncertainty])
