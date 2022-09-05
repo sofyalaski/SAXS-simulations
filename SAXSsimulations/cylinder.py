@@ -14,6 +14,8 @@ class Cylinder(Simulation):
         self.hMean = None
         self.rWidth = None
         self.rMean = None
+        self.theta = None
+        self.phi = None
         self.center = None  
         self.shape = 'cylinder'
         self.rotWidth = 3 # VARIATION IS 3 DEGREES
@@ -43,8 +45,10 @@ class Cylinder(Simulation):
         input:
             single[boolean] : create a single sphere in a box?        
         """
-        self.theta = np.random.uniform(low = -90, high = 90)
-        self.phi = np.random.uniform(low = -90, high = 90)
+        if self.theta is None:
+            self.theta = np.random.uniform(low = -90, high = 90)
+        if self.phi is None:
+            self.phi = np.random.uniform(low = -90, high = 90)
         if np.random.randint(2)==0:
             self.theta = np.random.choice([-90,0,90])
         else:
