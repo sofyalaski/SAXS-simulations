@@ -1,8 +1,8 @@
-from xml.dom.minidom import getDOMImplementation
 import numpy as np
 import pandas as pd
 import torch
-
+import scipy.optimize 
+from SAXSsimulations.utils import Intensity_func
 import sasmodels
 import sasmodels.core as core
 import sasmodels.direct_model as direct_model
@@ -402,6 +402,15 @@ class Simulation:
         self.Intensity_2D_sas = self.Intensity_2D_sas.reshape(kansas)
         self.model.release()
 
-    def __Chi_squared_norm(self, uncertainty):
+
+    def Chi_squared_norm(self, uncertainty):
         chi_squared = ((self.I_sas - self.binned_slice['I'])**2/self.binned_slice[uncertainty]**2).sum() 
         return chi_squared / (len(self.I_sas) - 1)
+
+    def optimize_scaling(self):
+        sol = scipy.optimize.least_squares(fun = Intensity_func, 
+                                    x0 = self.modelParameters_sas['scale'], 
+                                    method = 'lm',
+                                    args = [self])
+        self.update_scaling(sol.x)
+                          

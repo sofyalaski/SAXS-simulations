@@ -119,13 +119,17 @@ def plot_Q_vs_I(binned_data,xlim = None, path = None):
         plt.show()
     
 
-def plot_simulation_vs_sas( binned_data, sas_q, sas_intensity):
-    plt.plot(sas_q, sas_intensity, '-', color = 'red', label = 'SasView')
-    plt.plot(binned_data.Q, binned_data.I, color = 'blue', label = 'Simulation')
+def plot_simulation_vs_sas(simulation, uncertainty = 'ISigma'):
+    plt.plot(simulation.qx_sas, simulation.I_sas, '-', color = 'red', label = 'SasView')
+    if 'binned_slice' in dir(simulation):
+        plt.plot(simulation.binned_slice.Q, simulation.binned_slice.I, color = 'blue', label = 'Simulation')
+    else:
+        plt.plot(simulation.binned_data.Q, simulation.binned_data.I, color = 'blue', label = 'Simulation') 
     plt.xlabel("q (1/nm)")
     plt.ylabel("I (1/(cm sr))")
     plt.xscale('log') 
     plt.yscale('log') 
+    plt.title(r'$Chi^2$ error: {error}'.format(error = simulation.Chi_squared_norm(uncertainty) ))
     plt.legend()
 
 def plt_slices_sum(simulation):
