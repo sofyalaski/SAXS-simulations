@@ -373,10 +373,10 @@ class Simulation:
                 'length_pd_type': 'gaussian', 
                 'length_pd_n': 35,              
                 'theta_pd': self.rotWidth,
-                'theta_pd_type':'gaussian',
+                'theta_pd_type':self.theta_distribution,
                 'theta_pd_n':20,
                 'phi_pd': self.rotWidth,
-                'phi_pd_type':'gaussian',
+                'phi_pd_type':self.phi_distribution,
                 'phi_pd_n':20
                 })
         self.__create_sas_model()

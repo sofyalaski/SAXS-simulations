@@ -51,8 +51,12 @@ class Cylinder(Simulation):
             self.phi = np.random.uniform(low = -90, high = 90)
         if np.random.randint(2)==0:
             self.theta = np.random.choice([-90,0,90])
+            self.theta_distribution = 'gaussian'
+            self.phi_distribution = 'uniform'
         else:
             self.phi= np.random.choice([-90,0,90])
+            self.theta_distribution = 'uniform'
+            self.phi_distribution = 'gaussian'
         
         if self.rMean is None:
             self.rMean = -1
