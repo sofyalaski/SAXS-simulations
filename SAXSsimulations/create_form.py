@@ -8,6 +8,7 @@ import sasmodels.core as core
 import sasmodels.direct_model as direct_model
 
 
+
 class Simulation:
     def __init__(self, size, nPoints, volFrac = 0.05):
         self.box_size = size
@@ -98,7 +99,7 @@ class Simulation:
         FT = torch.fft.fftn(density, norm = 'forward')
         FT = torch.fft.fftshift(FT)
         FTI = torch.abs(FT)**2
-        self.FTI_torch = FTI.cpu().detach().numpy()
+        self.FTI_torch = FTI.cpu().detach()
         if slice is None:
             slice = self.nPoints//2+1
         self.FTI_slice_torch = self.FTI_torch[slice,:,:]
@@ -117,7 +118,7 @@ class Simulation:
 
         FT = torch.fft.fftshift(FT)
         FTI = torch.abs(FT)**2
-        self._FTI_custom = FTI.cpu().detach().numpy()
+        self._FTI_custom = FTI.cpu().detach()
 
     def calculate_custom_FTI_3D_slice(self, device = 'cuda', slice = None):
         """
@@ -137,7 +138,7 @@ class Simulation:
         FT_slice = torch.fft.fft2(FT[slice,:,:], norm = 'forward') # ft2 at slice
         FT_slice = torch.fft.fftshift(FT_slice) # shift the slice
         FTI = torch.abs(FT_slice)**2
-        self.FTI_slice_custom = FTI.cpu().detach().numpy()
+        self.FTI_slice_custom = FTI.cpu().detach()
         
     def __sinc(self, FTI):
         """
@@ -145,9 +146,9 @@ class Simulation:
         created as a convolution of sinc'ed voxel with the Fourier Transform of the structure
         """    
         if len(FTI.shape)==2:
-            self.sinc = np.abs(np.sinc(self._q2y*self.grid_space/2/np.pi)*np.sinc(self._q2z*self.grid_space/2/np.pi))**2
+            self.sinc = torch.abs(torch.special.sinc(self._q2y*self.grid_space/2/np.pi)*torch.special.sinc(self._q2z*self.grid_space/2/np.pi))**2
         else:
-            self.sinc = np.abs(np.sinc(self._q3x*self.grid_space/2/np.pi)*np.sinc(self._q3y*self.grid_space/2/np.pi)**np.sinc(self._q3z*self.grid_space/2/np.pi))**2
+            self.sinc = torch.abs(torch.special.sinc(self._q3x*self.grid_space/2/np.pi)*torch.special.sinc(self._q3y*self.grid_space/2/np.pi)**torch.special.sinc(self._q3z*self.grid_space/2/np.pi))**2
         FTI_sinced = FTI * self.sinc
         return FTI_sinced
     
@@ -235,21 +236,21 @@ class Simulation:
         radius = self.box_size//2
         if len(self.FTI_sinc.shape)==2:
             mask = (x2x)**2 + (x2y)**2 < radius**2 # center = 0
-            self.FTI_sinc_flatten = self.FTI_sinc[mask.to(torch.bool)]
-            self.Q_flatten = self.Q[self.nPoints//2+1,:,:][mask.to(torch.bool)]
+            self.FTI_sinc_masked = torch.where(mask, self.FTI_sinc, 0)
+            self.Q_masked = torch.where(mask, self.Q[self.nPoints//2+1,:,:], 0)
         else:
-            Q_sphere = Simulation(self.box_size, self.nPoints)
-            if len(Q_sphere.grid[Q_sphere.grid == 0])==1:
-                central_slice = torch.argwhere(Q_sphere.grid==0)[0,0] # start with the central slice
-                for i in range(int(radius//Q_sphere.grid_space)): # last grid point fully covering the radius is considered , sphere is symmetric so work in both directions
-                    d = Q_sphere.grid_space*i # calculate the distance grom the center to the slice
+            mask = Simulation(self.box_size, self.nPoints)
+            if len(mask.grid[mask.grid == 0])==1:
+                central_slice = torch.argwhere(mask.grid==0)[0,0] # start with the central slice
+                for i in range(int(radius//mask.grid_space)): # last grid point fully covering the radius is considered , sphere is symmetric so work in both directions
+                    d = mask.grid_space*i # calculate the distance grom the center to the slice
                     radius_at_d = torch.sqrt(radius**2-d**2) # calculate the radius of circle at slice using Pythagoras Theorem
                     circle_at_d = (x2x)**2 + (x2y)**2 < radius_at_d**2 # mask the circle location
-                    Q_sphere._box[central_slice+i,circle_at_d] = 1 # density inside sphere
-                    Q_sphere._box[central_slice-i,circle_at_d] = 1
+                    mask._box[central_slice+i,circle_at_d] = 1 # density inside sphere
+                    mask._box[central_slice-i,circle_at_d] = 1
             else:
                 # if the center of the sphere in between of two grid points, find those points and do the same in both dierections
-                nearest_bigger_ind = torch.argwhere(Q_sphere.grid>0)[0,0]
+                nearest_bigger_ind = torch.argwhere(mask.grid>0)[0,0]
                 for i in range(int(radius//self.grid_space)): # last grid point fully covering the radius is considered  
                     d1 = self.grid_space*i  - self.grid[nearest_bigger_ind-1]
                     d2 = self.grid_space*i + self.grid[nearest_bigger_ind]
@@ -257,11 +258,11 @@ class Simulation:
                     radius_at_d2 = torch.sqrt(radius**2-d2**2)
                     circle_at_d1 = (x2x)**2 + (x2y)**2 < radius_at_d1**2
                     circle_at_d2 = (x2x)**2 + (x2y)**2 < radius_at_d2**2
-                    Q_sphere._box[nearest_bigger_ind+i,circle_at_d1] = 1
-                    Q_sphere._box[nearest_bigger_ind-1-i,circle_at_d2] = 1
+                    mask._box[nearest_bigger_ind+i,circle_at_d1] = 1
+                    mask._box[nearest_bigger_ind-1-i,circle_at_d2] = 1
             
-            self.FTI_sinc_flatten = self.FTI_sinc[Q_sphere.density.to(torch.bool)]
-            self.Q_flatten = self.Q[Q_sphere.density.to(torch.bool)]
+            self.FTI_sinc_masked = torch.where(mask.density, self.FTI_sinc, np.nan)
+            self.Q_masked = torch.where(mask.density, self.Q, np.nan)
 
 
     def reBin(self, nbins, IEMin=0.01, QEMin=0.01, slice = 'center'):
@@ -281,8 +282,11 @@ class Simulation:
             in specified intervals and other calculated statistics on it
         """
         self.__mask_FT_to_sphere() # mask the Q to the sphere
-        qMin = float(self.Q_flatten[self.Q_flatten!=0].min())
-        qMax = float(self.Q_flatten.max())
+        
+        Q_masked_no_nan = self.Q_masked[~self.Q_masked.isnan()]
+        FTI_masked_no_nan = self.FTI_sinc_masked[~self.FTI_sinc_masked.isnan()]
+        qMin = float(Q_masked_no_nan[Q_masked_no_nan!=0].min())
+        qMax = float(Q_masked_no_nan.max())
 
         # prepare bin edges:
         binEdges = np.logspace(np.log10(qMin ), np.log10(qMax), num=nbins + 1)
@@ -294,18 +298,20 @@ class Simulation:
                 slice = self.nPoints//2+1
             else:
                 raise IndexError('Only rebins the central slice or the whole box')
-            df = pd.DataFrame({'Q':self.Q_flatten, 
-                            'I':self.FTI_sinc_flatten, 
-                            'ISigma':0.01 * self.FTI_sinc_flatten})
+            df = pd.DataFrame({'Q':Q_masked_no_nan, 
+                            'I': FTI_masked_no_nan, 
+                            'ISigma':0.01 * FTI_masked_no_nan})
             self.binned_slice = self.__reBinSlice(df, binEdges, IEMin=0.01, QEMin=0.01)
             
         else:
             # accumulate bins of slices in a new Data Frame
             binned_slices = pd.DataFrame()
             for nSlice in range(self.FTI_sinc.shape[0]):
-                df = pd.DataFrame({'Q':self.Q[nSlice,:,:].flatten(), 
-                                'I':self.FTI_sinc[nSlice,:,:].flatten(),
-                                'ISigma':0.01 * self.FTI_sinc[nSlice,:,:].flatten()})
+                Q = self.Q[nSlice,:,:][~self.Q[nSlice,:,:].isnan()]
+                I = self.FTI_sinc[nSlice,:,:][~self.FTI_sinc[nSlice,:,:].isnan()]
+                df = pd.DataFrame({'Q':Q, 
+                                'I':I,
+                                'ISigma':0.01 * I})
                 binned_slices = pd.concat([binned_slices, self.__reBinSlice(df, binEdges, IEMin=0.01, QEMin=0.01)], axis=0) 
 
             # another aggregation round, now group by index, which represents bins already 

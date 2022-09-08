@@ -66,7 +66,9 @@ def plot_3D_structure(entity, grid, realspace = True, path = None):
 
 def plot_FTI_version(custom_version, torch_version, qx, slice_number = None, path = None):
     # just another round to compare
-    difference = compute_error(custom_version,torch_version)
+    custom_version = custom_version.numpy()
+    torch_version = torch_version.numpy()
+    difference = compute_error(custom_version.numpy(),torch_version.numpy())
     print('the maximal difference between the implementation of the FTI is {}'.format(difference.max()))
     if not slice_number:
         slice_number = np.random.randint(low = 0, high = custom_version.shape[0])
@@ -89,6 +91,8 @@ def plot_FTI_version(custom_version, torch_version, qx, slice_number = None, pat
 
 def plot_FTI_version_center(custom_version, torch_version, qx,  path = None):
     # just another round to compare
+    custom_version = custom_version.numpy()
+    torch_version = torch_version.numpy()
     difference = compute_error(custom_version,torch_version)
     print('the maximal difference between the implementation of the FTI is {}'.format(difference.max()))
 
