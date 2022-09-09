@@ -22,7 +22,10 @@ def safe_dividend( *args):
 
     
 def Intensity_func(scale, simulation):
-    if 'binned_slice' in dir(simulation):
-        return simulation.binned_slice.I.values - simulation.I_sas*scale
+    if simulation.shape == 'sphere':
+        if 'binned_slice' in dir(simulation):
+            return simulation.binned_slice.I.values - simulation.I_sas*scale
+        else:
+            return simulation.binned_data.I.values - simulation.I_sas*scale
     else:
-        return simulation.binned_data.I.values - simulation.I_sas*scale
+        return simulation.FTI_sinc.flatten() - (simulation.I_sas*scale).flatten()

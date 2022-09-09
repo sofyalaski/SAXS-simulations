@@ -10,6 +10,7 @@ class Sphere(Simulation):
         self.rMean = None
         self.center = None  
         self.shape = 'sphere'
+        self.shapes = 0
 
     def place_shape(self, single = False, **kwargs):
         """
@@ -41,6 +42,7 @@ class Sphere(Simulation):
             if self.center is None:
                 self.center = np.random.uniform(low = -self.box_size/2 + self.rMean, high = self.box_size/2 - self.rMean, size = 3)
             self.__generate_sphere(self.rMean, self.center)
+            self.shapes=1
             print('volume fraction is {vf:.5f}, radius is {r:.2f}, center at ({cx:.1f},{cy:.1f},{cz:.1f}) '
                     .format(vf = self.volume_fraction, r = self.rMean, cx=self.center[0], cy = self.center[1], cz = self.center[2]))
         else:
@@ -51,6 +53,7 @@ class Sphere(Simulation):
                 # generate a position that is definitely inside the box
                 center = np.random.uniform(low = -self.box_size/2 + radius, high = self.box_size/2 - radius, size = 3)
                 self.__generate_sphere(radius, center)
+                self.shapes+=1
                 print('volume fraction is {vf:.5f}, radius is {r:.2f}, center at ({cx:.1f},{cy:.1f},{cz:.1f}) '
                         .format(vf = self.volume_fraction, r = radius, cx=center[0], cy = center[1], cz = center[2]))
 

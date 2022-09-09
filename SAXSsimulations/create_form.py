@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import torch
 import scipy.optimize 
+import scipy.stats
 from SAXSsimulations.utils import Intensity_func
 import sasmodels
 import sasmodels.core as core
@@ -344,16 +345,18 @@ class Simulation:
 
     ################################   The SasModels functions   ################################
 
-    def init_sas_model(self):
+    def init_sas_model(self, IEmin=0.01):
         try:
-            self.model = sasmodels.core.load_model(self.shape)
+            self.model = core.load_model(self.shape)
 
         except AttributeError:
             print("First create a manual simultion!")
         
-        #q = np.geomspace(float(self.binned_data['Q'].min()), float(self.binned_data['Q'].max()), 501)
-        self.qx_sas = self.binned_slice['Q'].values if 'binned_slice' in dir(self) else (self.binned_data['Q'].values)
-        self.Q_sas = np.array(self.qx_sas[np.newaxis, :])
+        if self.shape == 'sphere':
+            self.qx_sas = self.binned_slice['Q'].values if 'binned_slice' in dir(self) else (self.binned_data['Q'].values)
+            self.Q_sas = np.array(self.qx_sas[np.newaxis, :])
+        elif self.shape =='cylinder':
+            self.qx_sas = self.qx.clone().numpy()
         self.modelParameters_sas = self.model.info.parameters.defaults.copy()
         if self.shape == 'sphere':
             self.modelParameters_sas.update({
@@ -361,7 +364,7 @@ class Simulation:
                 'background':0., 
                 'sld':1.,
                 'sld_solvent':0.,
-                'radius_pd': self.rWidth, 
+                'radius_pd': self.rWidth/self.rMean, 
                 'radius_pd_type': 'gaussian', 
                 'radius_pd_n': 35
                 })
@@ -377,41 +380,54 @@ class Simulation:
                 'length': self.hMean, 
                 'length_pd': self.hWidth, 
                 'length_pd_type': 'gaussian', 
-                'length_pd_n': 35,              
+                'length_pd_n': 35,          
+                'theta':90 - self.theta,    
                 'theta_pd': self.rotWidth,
                 'theta_pd_type':self.theta_distribution,
-                'theta_pd_n':20,
+                'theta_pd_n':1,
+                'phi':self.phi,
                 'phi_pd': self.rotWidth,
                 'phi_pd_type':self.phi_distribution,
-                'phi_pd_n':20
+                'phi_pd_n':1
                 })
+            I = self.FTI_sinc.numpy().flatten()
+            self.uncertainty = {'IError':np.sqrt((I**2).sum())/ len(I),
+                                'IStd': np.nanstd(I, ddof = 1),
+                                'ISEM': scipy.stats.sem(I,ddof = 1,nan_policy='omit')}
+            self.uncertainty['ISigma'] = np.maximum(np.maximum(np.maximum(self.uncertainty['IStd'], self.uncertainty['ISEM']), self.uncertainty['IError']), I*IEmin)
         self.__create_sas_model()
                 
     def __create_sas_model(self):
-        self.kernel=self.model.make_kernel(self.Q_sas)
-        self.I_sas = sasmodels.direct_model.call_kernel(self.kernel, self.modelParameters_sas)
+        if self.shape == 'sphere':
+            self.kernel=self.model.make_kernel(self.Q_sas)
+            self.I_sas = direct_model.call_kernel(self.kernel, self.modelParameters_sas)
+        elif self.shape == 'cylinder':
+            q2y = self.qx_sas + 0* self.qx_sas[:,np.newaxis]
+            q2z = self.qx_sas[:,np.newaxis] + 0* self.qx_sas
+            q2y = q2y.reshape(q2y.size)
+            q2z=q2z.reshape(q2z.size)
+            print('start creating', q2y.shape)
+            self.kernel=self.model.make_kernel([q2y, q2z])
+            print('kernel done')
+            self.I_sas = direct_model.call_kernel(self.kernel, self.modelParameters_sas)
+            print('model done')
+            self.I_sas = self.I_sas.reshape(self.nPoints, self.nPoints)
+        self.model.release()
+
 
     def update_scaling(self, value):
         self.modelParameters_sas.update({'scale':value})
         self.__create_sas_model()
     
 
-    def intensity_2d_sas(self):
-        q2x = self.qx_sas + 0* self.qx_sas[:,np.newaxis]
-        q2z = self.qx_sas[:,np.newaxis] + 0* self.qx_sas
-        kansas = q2x.shape
-        q2x = q2x.reshape(q2x.size)
-        q2z = q2z.reshape(q2z.size)
-
-        kernel=self.model.make_kernel([q2x, q2z])
-        self.Intensity_2D_sas = sasmodels.direct_model.call_kernel(kernel, self.modelParameters_sas)
-        self.Intensity_2D_sas = self.Intensity_2D_sas.reshape(kansas)
-        self.model.release()
-
-
     def Chi_squared_norm(self, uncertainty):
-        chi_squared = ((self.I_sas - self.binned_slice['I'])**2/self.binned_slice[uncertainty]**2).sum() 
-        return chi_squared / (len(self.I_sas) - 1)
+        if self.shape == 'sphere':
+            chi_squared = ((self.I_sas - self.binned_slice['I'])**2/self.binned_slice[uncertainty]**2).sum() 
+            return chi_squared / (len(self.I_sas) - 1)
+        elif self.shape == 'cylinder':
+            
+            chi_squared = ((self.I_sas - self.FTI_sinc.numpy()).flatten()**2/self.uncertainty[uncertainty]**2).sum() 
+            return chi_squared / ( self.I_sas.shape[0]*self.I_sas.shape[1] - 1)
 
     def optimize_scaling(self):
         sol = scipy.optimize.least_squares(fun = Intensity_func, 
