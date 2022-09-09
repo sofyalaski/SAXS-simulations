@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 import itertools
 import torch
 import matplotlib.pyplot as plt
@@ -19,6 +20,7 @@ class Cylinder(Simulation):
         self.center = None  
         self.shape = 'cylinder'
         self.rotWidth = 3 # VARIATION IS 3 DEGREES
+        self.shapes=0
 
     def place_shape(self, single = False, **kwargs):
         """
@@ -31,6 +33,7 @@ class Cylinder(Simulation):
         if self.hWidth is None:
             self.hWidth = 0.15
         self.__cylinder_in_box(single)
+        
     
     def __cylinder_in_box(self,single):
         """
@@ -50,11 +53,11 @@ class Cylinder(Simulation):
         if self.phi is None:
             self.phi = np.random.uniform(low = -90, high = 90)
         if np.random.randint(2)==0:
-            self.theta = np.random.choice([-90,0,90])
+            #self.theta = np.random.choice([-90,0,90])
             self.theta_distribution = 'gaussian'
             self.phi_distribution = 'uniform'
         else:
-            self.phi= np.random.choice([-90,0,90])
+            #self.phi= np.random.choice([-90,0,90])
             self.theta_distribution = 'uniform'
             self.phi_distribution = 'gaussian'
         
@@ -81,6 +84,7 @@ class Cylinder(Simulation):
                 if success ==False:
                     self.center = None
                 attempt==1
+            self.shapes=1
             print('volume fraction is {vf:.5f}, height is {h:.2f}, radius is {r:.2f}, center at ({cx:.1f},{cy:.1f},{cz:.1f}), rotation phi is {phi:.1f}, rotation theta is {theta:.1f} '
                 .format(vf = self.volume_fraction, h = self.hMean, r = self.rMean, cx=self.center[0], cy = self.center[1], cz = self.center[2], phi = self.phi, theta = self.theta))
         else:
@@ -90,10 +94,10 @@ class Cylinder(Simulation):
                     height = np.random.normal(loc = self.hMean, scale= self.hWidth)
                     radius = np.random.normal(loc = self.rMean, scale= self.rWidth )
                     center = np.random.uniform(low = -self.box_size/2, high = self.box_size/2, size = 3)
-                    if self.theta in [-90, 0, 90]:
+                    if self.theta_distribution == 'gaussian':
                         theta = np.random.normal(loc = self.theta, scale= self.rotWidth ) 
                         phi = np.random.uniform(low = -90, high = 90)
-                    elif self.phi in [-90,0,90]:
+                    elif self.phi_distribution == 'gaussian':
                         theta = np.random.uniform(low = -90, high = 90)
                         phi = np.random.normal(loc = self.phi, scale= self.rotWidth )
 
@@ -102,6 +106,7 @@ class Cylinder(Simulation):
                     self.__generate_cylinder(radius, height, center, theta, phi)
                     success = self.pbc
                     if success:
+                        self.shapes+=1
                         print('volume fraction is {vf:.5f}, height is {h:.3f}, radius is {r:.3f}, center at ({cx:.1f},{cy:.1f},{cz:.1f}), rotation phi is {phi:.1f}, rotation theta is {theta:.1f} '
                         .format(vf = self.volume_fraction, h = height, r = radius, cx=center[0], cy = center[1], cz = center[2], phi = phi, theta = theta))
                     attempt==1
@@ -154,17 +159,17 @@ class Cylinder(Simulation):
             directory to save
             for_SasView: boolean, if True converts Q and I to SASView compartible values: Armstrong^-1 for Q and (m*sr)^-1.
         """
-        if 'binned_slice' in dir(self):
-            data = self.binned_slice
-        else:
-            data = self.binned_data
-
+        Q = self.Q[self.nPoints//2+1,:,:].numpy()
+        data = pd.DataFrame({'Qx': self.qx[math.ceil(len(Q)/len(self.qx))], 
+                             'Qy': self.qx[len(Q)%len(self.qx)],
+                             'I': self.FTI_sinc.numpy().flatten(), 
+                             'ISigma': self.uncertainty[uncertainty]})
         if for_SasView:
-            data.assign(Q = data.Q/10, I = data.I/100, ISigma = data.ISigma/100).to_csv(directory+'/polydispersed_cylinders_{r}_{h}.dat'.
-            format(r = int(self.rMean*1000), h = int(self.hMean*1000)), header=None, index=None, columns=["Q", "I", uncertainty])
+            data.assign(Qx = data.Qx/10, Qy = data.Qy/10, I = data.I/100, ISigma = data.ISigma/100).to_csv(directory+'/polydispersed_cylinders_{r}_{h}.dat'.
+            format(r = int(self.rMean*1000), h = int(self.hMean*1000)), header=None, index=None, columns=["Qx", "Qy", "I", uncertainty])
         else:
             data.to_csv(directory+'/polydispersed_cylinders_{r}_{h}.dat'.
-            format(r = int(self.rMean*1000), h = int(self.hMean*1000)), header=None, index=None, columns=["Q", "I", uncertainty])
+            format(r = int(self.rMean*1000), h = int(self.hMean*1000)), header=None, index=None, columns=["Qx", "Qy", "I", uncertainty])
 
 
 
