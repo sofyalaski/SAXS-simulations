@@ -124,17 +124,37 @@ def plot_Q_vs_I(binned_data,xlim = None, path = None):
     
 
 def plot_simulation_vs_sas(simulation, uncertainty = 'ISigma'):
-    plt.plot(simulation.qx_sas, simulation.I_sas, '-', color = 'red', label = 'SasView')
-    if 'binned_slice' in dir(simulation):
-        plt.plot(simulation.binned_slice.Q, simulation.binned_slice.I, color = 'blue', label = 'Simulation')
+    if simulation.shape == 'sphere':
+        plt.plot(simulation.qx_sas, simulation.I_sas, '-', color = 'red', label = 'SasView')
+        if 'binned_slice' in dir(simulation):
+            plt.plot(simulation.binned_slice.Q, simulation.binned_slice.I, color = 'blue', label = 'Simulation')
+        else:
+            plt.plot(simulation.binned_data.Q, simulation.binned_data.I, color = 'blue', label = 'Simulation') 
+        plt.xlabel("q (1/nm)")
+        plt.ylabel("I (1/(cm sr))")
+        plt.xscale('log') 
+        plt.yscale('log') 
+        plt.title(r'$Chi^2$ error: {error}'.format(error = simulation.Chi_squared_norm(uncertainty) ))
+        plt.legend()
     else:
-        plt.plot(simulation.binned_data.Q, simulation.binned_data.I, color = 'blue', label = 'Simulation') 
-    plt.xlabel("q (1/nm)")
-    plt.ylabel("I (1/(cm sr))")
-    plt.xscale('log') 
-    plt.yscale('log') 
-    plt.title(r'$Chi^2$ error: {error}'.format(error = simulation.Chi_squared_norm(uncertainty) ))
-    plt.legend()
+        print(r'$Chi^2$ error: {error}'.format(error = simulation.Chi_squared_norm(uncertainty) ))
+        fig,axs = plt.subplots(1,3,figsize = (15,5))
+        ax = axs[0]
+        im = ax.imshow(np.log10(simulation.FTI_sinc), extent = [simulation.qx.min(), simulation.qx.max(), simulation.qx.min(), simulation.qx.max()])
+        plt.xlabel("q (1/nm)")
+        plt.ylabel("q (1/nm)")
+        plt.title('manual simulation')
+        ax = axs[1]
+        im = ax.imshow(np.log10(simulation.I_sas), extent = [simulation.qx.min(), simulation.qx.max(), simulation.qx.min(), simulation.qx.max()])
+        plt.xlabel("q (1/nm)")
+        plt.ylabel("q (1/nm)")
+        plt.title('SasModels simulation')
+        ax = axs[2]
+        im = ax.imshow(np.log10(simulation.FTI_sinc-simulation.I_sas) , extent = [simulation.qx.min(), simulation.qx.max(), simulation.qx.min(), simulation.qx.max()] )
+        plt.xlabel("q (1/nm)")
+        plt.ylabel("q (1/nm)")
+        plt.title('logged difference')
+
 
 def plt_slices_sum(simulation):
     fig,axs = plt.subplots(1,3,figsize = (15,5))
