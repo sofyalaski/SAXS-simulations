@@ -192,7 +192,7 @@ class Simulation:
         else:
             return np.max([df.QSEM, df.Q*QEMin])
 
-    def __reBinSlice(self, df, binEdges, IEMin=0.01, QEMin=0.01):
+    def __reBinSlice(self, df, bins, IEMin, QEMin):
 
         """
         Unweighted rebinning funcionality with extended uncertainty estimation, adapted from the datamerge methods,
@@ -201,26 +201,41 @@ class Simulation:
         for desired properties.
         input: 
             df: pandas.DataFrame with the Fourier Transformed values
+            bins: either predefined intervals on Q ( for sphere ) or the group (for cylinders, each group corresponds to interval in qy and qz)
             IEMin: coefficent used to determine ISigma
             QEMin: coefficent used to determine QSigma
         output:
             binned_data: pandas.DataFrame with the values of intensity I and scattering angle Q rebinned 
             in specified intervals and other calculated statistics on it
         """
-        bins = pd.cut(df['Q'], binEdges, right = False, include_lowest = True)
-
-        if "QSigma" in df.keys(): 
-            binned_data = df.groupby(bins).agg({'I':['mean', self.__determine_std, self.__determine_sem], 
-                                                'ISigma': self.__determine_Error, 
-                                                'Q':['mean', self.__determine_std, self.__determine_sem], 
-                                                'QSigma': self.__determine_Error})
-            binned_data.columns = ['I', 'IStd','ISEM', 'IError', 'Q','QStd', 'QSEM', 'QError']
-        else: #  propagated uncertainties in Q if available
-            binned_data = df.groupby(bins).agg({'I':['mean', self.__determine_std, self.__determine_sem], 
-                                                'ISigma': self.__determine_Error, 
-                                                'Q':['mean', self.__determine_std, self.__determine_sem]})
-            binned_data.columns = ['I', 'IStd','ISEM', 'IError', 'Q','QStd', 'QSEM']
-
+        if self.shape == 'sphere':
+            if "QSigma" in df.keys(): 
+                binned_data = df.groupby(bins).agg({'I':['mean', self.__determine_std, self.__determine_sem], 
+                                                    'ISigma': self.__determine_Error, 
+                                                    'Q':['mean', self.__determine_std, self.__determine_sem], 
+                                                    'QSigma': self.__determine_Error})
+                binned_data.columns = ['I', 'IStd','ISEM', 'IError', 'Q','QStd', 'QSEM', 'QError']
+            else: #  propagated uncertainties in Q if available
+                binned_data = df.groupby(bins).agg({'I':['mean', self.__determine_std, self.__determine_sem], 
+                                                    'ISigma': self.__determine_Error, 
+                                                    'Q':['mean', self.__determine_std, self.__determine_sem]})
+                binned_data.columns = ['I', 'IStd','ISEM', 'IError', 'Q','QStd', 'QSEM']
+        elif self.shape == 'cylinder':
+            if "QSigma" in df.keys(): 
+                binned_data = df.groupby(bins).agg({'I':['mean', self.__determine_std, self.__determine_sem], 
+                                                    'ISigma': self.__determine_Error, 
+                                                    'Q':['mean', self.__determine_std, self.__determine_sem], 
+                                                    'QSigma': self.__determine_Error,
+                                                    'qy':['mean', self.__determine_sem],
+                                                    'qz':['mean', self.__determine_sem]})
+                binned_data.columns = ['I', 'IStd','ISEM', 'IError', 'Q','QStd', 'QSEM', 'QError', 'qy', 'qy_sem', 'qz', 'qz_sem']
+            else: #  propagated uncertainties in Q if available
+                binned_data = df.groupby(bins).agg({'I':['mean', self.__determine_std, self.__determine_sem], 
+                                                    'ISigma': self.__determine_Error, 
+                                                    'Q':['mean', self.__determine_std, self.__determine_sem],
+                                                    'qy':['mean', self.__determine_sem],
+                                                    'qz':['mean', self.__determine_sem]})
+                binned_data.columns = ['I', 'IStd','ISEM', 'IError', 'Q','QStd', 'QSEM', 'qy', 'qy_sem', 'qz', 'qz_sem']
         binned_data['ISigma'] = binned_data.apply(lambda x: self.__determine_ISigma(x, IEMin), axis = 1) 
         # if Qerror ad QSEm are same(when not specified separately), save space and not copy it, Qsigma is fixed to account for it
         # or comment out next line to copy
@@ -229,7 +244,10 @@ class Simulation:
 
         # remove empty bins
         binned_data.dropna(thresh=4, inplace=True)
-        return binned_data[['Q', 'I', 'IStd', 'ISEM', 'IError', 'ISigma', 'QStd', 'QSEM', 'QSigma']]
+        if self.shape == 'sphere':
+            return binned_data[['Q', 'I', 'IStd', 'ISEM', 'IError', 'ISigma', 'QStd', 'QSEM', 'QSigma']]
+        elif self.shape == 'cylinder':
+            return binned_data[['Q', 'I', 'IStd', 'ISEM', 'IError', 'ISigma', 'QStd', 'QSEM', 'QSigma','qy', 'qy_sem', 'qz', 'qz_sem']]
 
     def __mask_FT_to_sphere(self):
         x2x = self.grid[None,:]
@@ -266,7 +284,7 @@ class Simulation:
             self.Q_masked = torch.where(mask.density, self.Q, np.nan)
 
 
-    def reBin(self, nbins, IEMin=0.01, QEMin=0.01, slice = 'center'):
+    def __reBin_sphere(self, nbins, IEMin, QEMin, slice = 'center'):
         """
         Unweighted rebinning funcionality with extended uncertainty estimation, adapted from the datamerge methods,
         as implemented in Paulina's notebook of spring 2020.
@@ -302,7 +320,8 @@ class Simulation:
             df = pd.DataFrame({'Q':Q_masked_no_nan, 
                             'I': FTI_masked_no_nan, 
                             'ISigma':0.01 * FTI_masked_no_nan})
-            self.binned_slice = self.__reBinSlice(df, binEdges, IEMin=0.01, QEMin=0.01)
+            bins = pd.cut(df['Q'], binEdges, right = False, include_lowest = True)
+            self.binned_slice = self.__reBinSlice(df, bins, IEMin, QEMin)
             
         else:
             # accumulate bins of slices in a new Data Frame
@@ -313,7 +332,8 @@ class Simulation:
                 df = pd.DataFrame({'Q':Q, 
                                 'I':I,
                                 'ISigma':0.01 * I})
-                binned_slices = pd.concat([binned_slices, self.__reBinSlice(df, binEdges, IEMin=0.01, QEMin=0.01)], axis=0) 
+                bins = pd.cut(df['Q'], binEdges, right = False, include_lowest = True)
+                binned_slices = pd.concat([binned_slices, self.__reBinSlice(df, bins, IEMin, QEMin)], axis=0) 
 
             # another aggregation round, now group by index, which represents bins already 
             if "QSigma" in binned_slices.keys():
@@ -330,6 +350,38 @@ class Simulation:
             self.binned_data['ISigma'] = self.binned_data.apply(lambda x: self.__determine_ISigma(x, IEMin), axis = 1) 
             self.binned_data['QSigma'] = self.binned_data.apply(lambda x: self.__determine_QSigma(x, QEMin), axis = 1) 
             self.binned_data.dropna(thresh=4, inplace=True) # empty rows appear because of groupping by index in accumulated data, which in turn consisted of binEdges, which are sometimes empty
+
+    def __reBin_cylinder(self, nbins, IEMin, QEMin):
+        
+        Q_central_slice = self.Q[self.nPoints//2+1,:,:]
+        qMin = float(self.qx[self.qx!=0].min())
+        qMax = float(self.qx.max())
+
+        # prepare bin edges:
+        binEdges = np.linspace(qMin, qMax, num=nbins + 1)
+        binEdges[-1] = binEdges[-1] + 1e-3 * (binEdges[-1] - binEdges[-2])
+        Q_rebinned_slice = np.sqrt(binEdges[None,:]**2 + binEdges[:,None]**2)
+
+                
+        df = pd.DataFrame({'Q':Q_central_slice.flatten(), 
+                        'I':self.FTI_sinc.numpy().flatten(),
+                        'ISigma':0.01 * self.FTI_sinc.numpy().flatten()})
+        df = df.assign(qy = self.qx[df.index//len(self.qx)], qz = self.qx[df.index%len(self.qx)])
+
+        bins_qy = pd.cut(df['qy'], binEdges, right = False, include_lowest = True)
+        bins_qz = pd.cut(df['qz'], binEdges, right = False, include_lowest = True)
+        bins = pd.concat([bins_qy,bins_qz],axis=1)
+        bins_id = bins.groupby(['qy','qz']).ngroup()
+        
+        self.binned_slice = self.__reBinSlice( df, bins_id, IEMin, QEMin)
+
+    def reBin(self, nbins,IEMin=0.01, QEMin=0.01, slice = None):
+        if self.shape == 'sphere':
+            self.__reBin_sphere(nbins, IEMin, QEMin, slice)
+        elif self.shape == 'cylinder':
+            self.__reBin_cylinder(nbins, IEMin, QEMin)
+
+
 
     def drop_first_bin(self ):
         """
@@ -374,11 +426,11 @@ class Simulation:
                 'background':0., 
                 'sld':1.,
                 'sld_solvent':0.,
-                'radius_pd': self.rWidth, 
+                'radius_pd': self.rWidth/self.rMean, 
                 'radius_pd_type': 'gaussian', 
                 'radius_pd_n': 35, 
                 'length': self.hMean, 
-                'length_pd': self.hWidth, 
+                'length_pd': self.hWidth/self.hMean, 
                 'length_pd_type': 'gaussian', 
                 'length_pd_n': 35,          
                 'theta':90 - self.theta,    

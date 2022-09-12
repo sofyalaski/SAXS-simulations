@@ -140,7 +140,8 @@ def plot_simulation_vs_sas(simulation, uncertainty = 'ISigma'):
         print(r'$Chi^2$ error: {error}'.format(error = simulation.Chi_squared_norm(uncertainty) ))
         fig,axs = plt.subplots(1,3,figsize = (15,5))
         ax = axs[0]
-        im = ax.imshow(np.log10(simulation.FTI_sinc), extent = [simulation.qx.min(), simulation.qx.max(), simulation.qx.min(), simulation.qx.max()])
+        binned_FTI = simulation.binned_slice['I'].values.reshape(np.sqrt(len(simulation.binned_slice)),np.sqrt(len(simulation.binned_slice)))
+        im = ax.imshow(np.log10(binned_FTI), extent = [simulation.qx.min(), simulation.qx.max(), simulation.qx.min(), simulation.qx.max()])
         plt.xlabel("q (1/nm)")
         plt.ylabel("q (1/nm)")
         plt.title('manual simulation')
@@ -150,7 +151,7 @@ def plot_simulation_vs_sas(simulation, uncertainty = 'ISigma'):
         plt.ylabel("q (1/nm)")
         plt.title('SasModels simulation')
         ax = axs[2]
-        im = ax.imshow(np.log10(simulation.FTI_sinc-simulation.I_sas) , extent = [simulation.qx.min(), simulation.qx.max(), simulation.qx.min(), simulation.qx.max()] )
+        im = ax.imshow(np.log10(binned_FTI-simulation.I_sas) , extent = [simulation.qx.min(), simulation.qx.max(), simulation.qx.min(), simulation.qx.max()] )
         plt.xlabel("q (1/nm)")
         plt.ylabel("q (1/nm)")
         plt.title('logged difference')
