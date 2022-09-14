@@ -434,11 +434,11 @@ class Simulation:
                 'length_pd': self.hWidth/self.hMean, 
                 'length_pd_type': 'gaussian', 
                 'length_pd_n': 35,          
-                'theta':90-self.theta,    
+                'theta':self.theta,    
                 'theta_pd': self.rotWidth,
                 'theta_pd_type':self.theta_distribution,
                 'theta_pd_n':10,
-                'phi':self.phi,
+                'phi':90-self.phi,
                 'phi_pd': self.rotWidth,
                 'phi_pd_type':self.phi_distribution,
                 'phi_pd_n':10
