@@ -160,10 +160,10 @@ class Cylinder(Simulation):
             for_SasView: boolean, if True converts Q and I to SASView compartible values: Armstrong^-1 for Q and (m*sr)^-1.
         """
         Q = self.Q[self.nPoints//2+1,:,:].numpy()
-        data = pd.DataFrame({'Qx': self.qx[math.ceil(len(Q)/len(self.qx))], 
-                             'Qy': self.qx[len(Q)%len(self.qx)],
-                             'I': self.FTI_sinc.numpy().flatten(), 
-                             'ISigma': self.uncertainty[uncertainty]})
+        data = pd.DataFrame({'Qx': self.binned_slice['qy'], 
+                             'Qy': self.binned_slice['qz'],
+                             'I': self.binned_slice['I'], 
+                             'ISigma': self.binned_slice[uncertainty]})
         if for_SasView:
             data.assign(Qx = data.Qx/10, Qy = data.Qy/10, I = data.I/100, ISigma = data.ISigma/100).to_csv(directory+'/polydispersed_cylinders_{r}_{h}.dat'.
             format(r = int(self.rMean*1000), h = int(self.hMean*1000)), header=None, index=None, columns=["Qx", "Qy", "I", uncertainty])

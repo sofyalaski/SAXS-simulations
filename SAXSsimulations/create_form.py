@@ -308,10 +308,10 @@ class Simulation:
         qMax = float(Q_masked_no_nan.max())
 
         # prepare bin edges:
-        binEdges = np.logspace(np.log10(qMin ), np.log10(qMax), num=nbins + 1)
+        self.binEdges = np.logspace(np.log10(qMin ), np.log10(qMax), num=nbins + 1)
 
         # add a little to the end to ensure the last datapoint is captured:
-        binEdges[-1] = binEdges[-1] + 1e-3 * (binEdges[-1] - binEdges[-2])
+        self.binEdges[-1] = self.binEdges[-1] + 1e-3 * (self.binEdges[-1] - self.binEdges[-2])
         if slice is not None:
             if slice=='center':
                 slice = self.nPoints//2+1
@@ -320,7 +320,7 @@ class Simulation:
             df = pd.DataFrame({'Q':Q_masked_no_nan, 
                             'I': FTI_masked_no_nan, 
                             'ISigma':0.01 * FTI_masked_no_nan})
-            bins = pd.cut(df['Q'], binEdges, right = False, include_lowest = True)
+            bins = pd.cut(df['Q'], self.binEdges, right = False, include_lowest = True)
             self.binned_slice = self.__reBinSlice(df, bins, IEMin, QEMin)
             
         else:
@@ -332,7 +332,7 @@ class Simulation:
                 df = pd.DataFrame({'Q':Q, 
                                 'I':I,
                                 'ISigma':0.01 * I})
-                bins = pd.cut(df['Q'], binEdges, right = False, include_lowest = True)
+                bins = pd.cut(df['Q'], self.binEdges, right = False, include_lowest = True)
                 binned_slices = pd.concat([binned_slices, self.__reBinSlice(df, bins, IEMin, QEMin)], axis=0) 
 
             # another aggregation round, now group by index, which represents bins already 
@@ -349,7 +349,7 @@ class Simulation:
                 self.binned_data.columns = ['I', 'IStd','ISEM', 'IError', 'Q','QStd', 'QSEM']
             self.binned_data['ISigma'] = self.binned_data.apply(lambda x: self.__determine_ISigma(x, IEMin), axis = 1) 
             self.binned_data['QSigma'] = self.binned_data.apply(lambda x: self.__determine_QSigma(x, QEMin), axis = 1) 
-            self.binned_data.dropna(thresh=4, inplace=True) # empty rows appear because of groupping by index in accumulated data, which in turn consisted of binEdges, which are sometimes empty
+            self.binned_data.dropna(thresh=4, inplace=True) # empty rows appear because of groupping by index in accumulated data, which in turn consisted of self.binEdges, which are sometimes empty
 
     def __reBin_cylinder(self, nbins, IEMin, QEMin):
         
@@ -358,24 +358,23 @@ class Simulation:
         qMax = float(self.qx.max())
 
         # prepare bin edges:
-        binEdges = np.linspace(qMin, qMax, num=nbins + 1)
-        binEdges[-1] = binEdges[-1] + 1e-3 * (binEdges[-1] - binEdges[-2])
-        Q_rebinned_slice = np.sqrt(binEdges[None,:]**2 + binEdges[:,None]**2)
-
+        self.binEdges = np.linspace(qMin, qMax, num=nbins + 1)
+        self.binEdges[-1] = self.binEdges[-1] + 1e-3 * (self.binEdges[-1] - self.binEdges[-2])
                 
         df = pd.DataFrame({'Q':Q_central_slice.flatten(), 
                         'I':self.FTI_sinc.numpy().flatten(),
                         'ISigma':0.01 * self.FTI_sinc.numpy().flatten()})
         df = df.assign(qy = self.qx[df.index//len(self.qx)], qz = self.qx[df.index%len(self.qx)])
 
-        bins_qy = pd.cut(df['qy'], binEdges, right = False, include_lowest = True)
-        bins_qz = pd.cut(df['qz'], binEdges, right = False, include_lowest = True)
+        bins_qy = pd.cut(df['qy'], self.binEdges, right = False, include_lowest = True)
+        bins_qz = pd.cut(df['qz'], self.binEdges, right = False, include_lowest = True)
         bins = pd.concat([bins_qy,bins_qz],axis=1)
         bins_id = bins.groupby(['qy','qz']).ngroup()
         
         self.binned_slice = self.__reBinSlice( df, bins_id, IEMin, QEMin)
 
     def reBin(self, nbins,IEMin=0.01, QEMin=0.01, slice = None):
+        self.nBins = nbins
         if self.shape == 'sphere':
             self.__reBin_sphere(nbins, IEMin, QEMin, slice)
         elif self.shape == 'cylinder':
@@ -408,7 +407,9 @@ class Simulation:
             self.qx_sas = self.binned_slice['Q'].values if 'binned_slice' in dir(self) else (self.binned_data['Q'].values)
             self.Q_sas = np.array(self.qx_sas[np.newaxis, :])
         elif self.shape =='cylinder':
-            self.qx_sas = self.qx.clone().numpy()
+            qMin = float(self.qx[self.qx!=0].min())
+            qMax = float(self.qx.max())
+            self.qx_sas = np.linspace(qMin, qMax, num=self.nBins)
         self.modelParameters_sas = self.model.info.parameters.defaults.copy()
         if self.shape == 'sphere':
             self.modelParameters_sas.update({
@@ -433,20 +434,15 @@ class Simulation:
                 'length_pd': self.hWidth/self.hMean, 
                 'length_pd_type': 'gaussian', 
                 'length_pd_n': 35,          
-                'theta':90 - self.theta,    
+                'theta':90-self.theta,    
                 'theta_pd': self.rotWidth,
                 'theta_pd_type':self.theta_distribution,
-                'theta_pd_n':1,
+                'theta_pd_n':10,
                 'phi':self.phi,
                 'phi_pd': self.rotWidth,
                 'phi_pd_type':self.phi_distribution,
-                'phi_pd_n':1
+                'phi_pd_n':10
                 })
-            I = self.FTI_sinc.numpy().flatten()
-            self.uncertainty = {'IError':np.sqrt((I**2).sum())/ len(I),
-                                'IStd': np.nanstd(I, ddof = 1),
-                                'ISEM': scipy.stats.sem(I,ddof = 1,nan_policy='omit')}
-            self.uncertainty['ISigma'] = np.maximum(np.maximum(np.maximum(self.uncertainty['IStd'], self.uncertainty['ISEM']), self.uncertainty['IError']), I*IEmin)
         self.__create_sas_model()
                 
     def __create_sas_model(self):
@@ -457,13 +453,13 @@ class Simulation:
             q2y = self.qx_sas + 0* self.qx_sas[:,np.newaxis]
             q2z = self.qx_sas[:,np.newaxis] + 0* self.qx_sas
             q2y = q2y.reshape(q2y.size)
-            q2z=q2z.reshape(q2z.size)
+            q2z = q2z.reshape(q2z.size)
             print('start creating', q2y.shape)
             self.kernel=self.model.make_kernel([q2y, q2z])
             print('kernel done')
             self.I_sas = direct_model.call_kernel(self.kernel, self.modelParameters_sas)
             print('model done')
-            self.I_sas = self.I_sas.reshape(self.nPoints, self.nPoints)
+            self.I_sas = self.I_sas.reshape(self.nBins, self.nBins)
         self.model.release()
 
 
@@ -477,8 +473,7 @@ class Simulation:
             chi_squared = ((self.I_sas - self.binned_slice['I'])**2/self.binned_slice[uncertainty]**2).sum() 
             return chi_squared / (len(self.I_sas) - 1)
         elif self.shape == 'cylinder':
-            
-            chi_squared = ((self.I_sas - self.FTI_sinc.numpy()).flatten()**2/self.uncertainty[uncertainty]**2).sum() 
+            chi_squared = ((self.I_sas.flatten() - self.binned_slice['I'])**2/self.binned_slice[uncertainty]**2).sum() 
             return chi_squared / ( self.I_sas.shape[0]*self.I_sas.shape[1] - 1)
 
     def optimize_scaling(self):
@@ -488,3 +483,22 @@ class Simulation:
                                     args = [self])
         self.update_scaling(sol.x)
                           
+
+'''
+def noisy(noise_type,image):
+    if noise_type == "gauss":
+        row,col,ch= image.shape
+        mean = 0
+        var = 0.1
+        sigma = var**0.5
+        gauss = np.random.normal(mean,sigma,(row,col,ch))
+        gauss = gauss.reshape(row,col,ch)
+        noisy = image + gauss
+        return noisy
+    elif noise_type == "poisson":
+        vals = len(np.unique(image))
+        vals = 2 ** np.ceil(np.log2(vals))
+        noisy = np.random.poisson(image * vals) / float(vals)
+        return noisy
+
+'''

@@ -140,7 +140,7 @@ def plot_simulation_vs_sas(simulation, uncertainty = 'ISigma'):
         print(r'$Chi^2$ error: {error}'.format(error = simulation.Chi_squared_norm(uncertainty) ))
         fig,axs = plt.subplots(1,3,figsize = (15,5))
         ax = axs[0]
-        binned_FTI = simulation.binned_slice['I'].values.reshape(np.sqrt(len(simulation.binned_slice)),np.sqrt(len(simulation.binned_slice)))
+        binned_FTI = simulation.binned_slice['I'].values.reshape(simulation.nBins, simulation.nBins)
         im = ax.imshow(np.log10(binned_FTI), extent = [simulation.qx.min(), simulation.qx.max(), simulation.qx.min(), simulation.qx.max()])
         plt.xlabel("q (1/nm)")
         plt.ylabel("q (1/nm)")

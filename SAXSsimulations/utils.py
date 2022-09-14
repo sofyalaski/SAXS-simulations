@@ -28,4 +28,4 @@ def Intensity_func(scale, simulation):
         else:
             return simulation.binned_data.I.values - simulation.I_sas*scale
     else:
-        return simulation.FTI_sinc.flatten() - (simulation.I_sas*scale).flatten()
+        return simulation.binned_slice.I - (simulation.I_sas*scale).flatten()
