@@ -94,12 +94,16 @@ class Cylinder(Simulation):
                     height = np.random.normal(loc = self.hMean, scale= self.hWidth)
                     radius = np.random.normal(loc = self.rMean, scale= self.rWidth )
                     center = np.random.uniform(low = -self.box_size/2, high = self.box_size/2, size = 3)
+                    self.theta_all = []
+                    self.phi_all = []
                     if self.theta_distribution == 'gaussian':
                         theta = np.random.normal(loc = self.theta, scale= self.rotWidth ) 
                         phi = np.random.uniform(low = -90, high = 90)
+                        self.phi_all.append(phi)
                     elif self.phi_distribution == 'gaussian':
                         theta = np.random.uniform(low = -90, high = 90)
                         phi = np.random.normal(loc = self.phi, scale= self.rotWidth )
+                        self.theta_all.append(theta)
 
                     if ((center >self.box_size/2)|(center<-self.box_size/2) == True).any() or (radius <0) or (height <0):
                         continue # center is outside of box or radius or height is negatibve

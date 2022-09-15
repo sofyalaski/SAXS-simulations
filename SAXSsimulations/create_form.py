@@ -434,12 +434,12 @@ class Simulation:
                 'length_pd': self.hWidth/self.hMean, 
                 'length_pd_type': 'gaussian', 
                 'length_pd_n': 35,          
-                'theta':self.theta,    
-                'theta_pd': self.rotWidth,
+                'theta':-self.theta,    
+                'theta_pd': self.rotWidth if not self.theta_all else self.rotWidth/np.mean(self.theta_all) ,
                 'theta_pd_type':self.theta_distribution,
                 'theta_pd_n':10,
-                'phi':90-self.phi,
-                'phi_pd': self.rotWidth,
+                'phi':90+self.phi,
+                'phi_pd': self.rotWidth if not self.phi_all else self.rotWidth/np.mean(self.phi_all),
                 'phi_pd_type':self.phi_distribution,
                 'phi_pd_n':10
                 })
