@@ -72,6 +72,8 @@ class Cylinder(Simulation):
             while self.hMean<=0:
                 self.hMean = np.random.normal(loc = self.box_size*0.4, scale= self.box_size*0.1 )
         attempt = 0
+        self.theta_all = []
+        self.phi_all = []
         if single:
             success = False
             while success == False and attempt <100:
@@ -94,8 +96,6 @@ class Cylinder(Simulation):
                     height = np.random.normal(loc = self.hMean, scale= self.hWidth)
                     radius = np.random.normal(loc = self.rMean, scale= self.rWidth )
                     center = np.random.uniform(low = -self.box_size/2, high = self.box_size/2, size = 3)
-                    self.theta_all = []
-                    self.phi_all = []
                     if self.theta_distribution == 'gaussian':
                         theta = np.random.normal(loc = self.theta, scale= self.rotWidth ) 
                         phi = np.random.uniform(low = -90, high = 90)

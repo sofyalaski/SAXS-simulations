@@ -58,9 +58,9 @@ class Simulation:
 
         """
         self.grid = torch.linspace(-self.box_size /2 , self.box_size /2, self.nPoints) 
-        self.__expand_Q()
         self._box  = torch.zeros((self.nPoints,self.nPoints,self.nPoints), dtype = torch.float32)
         self.grid_space = self.box_size/(self.nPoints-1)
+        self.__expand_Q()
     
     def __expand_Q(self):
         """
@@ -69,7 +69,7 @@ class Simulation:
 
         """
         divLength = self.box_size/self.nPoints
-        self.qx = torch.linspace(-torch.pi/divLength, torch.pi/divLength, self.nPoints)
+        self.qx = torch.linspace(-torch.pi/self.grid_space, torch.pi/self.grid_space, self.nPoints)
         #qy = qx.clone()
         #qz = qx.clone()
         self._q2y = self.qx[None,:]
@@ -434,12 +434,12 @@ class Simulation:
                 'length_pd': self.hWidth/self.hMean, 
                 'length_pd_type': 'gaussian', 
                 'length_pd_n': 35,          
-                'theta':-self.theta,    
-                'theta_pd': self.rotWidth if not self.theta_all else self.rotWidth/np.mean(self.theta_all) ,
+                'theta':self.theta,    
+                'theta_pd': self.rotWidth if not self.theta_all else np.abs(self.rotWidth/np.mean(self.theta_all)) ,
                 'theta_pd_type':self.theta_distribution,
                 'theta_pd_n':10,
-                'phi':90+self.phi,
-                'phi_pd': self.rotWidth if not self.phi_all else self.rotWidth/np.mean(self.phi_all),
+                'phi':90-self.phi,
+                'phi_pd': self.rotWidth if not self.phi_all else np.abs(self.rotWidth/np.mean(self.phi_all)),
                 'phi_pd_type':self.phi_distribution,
                 'phi_pd_n':10
                 })
@@ -460,6 +460,7 @@ class Simulation:
             self.I_sas = direct_model.call_kernel(self.kernel, self.modelParameters_sas)
             print('model done')
             self.I_sas = self.I_sas.reshape(self.nBins, self.nBins)
+        self.I_sas += np.random.poisson(self.I_sas) # adding some poison noise
         self.model.release()
 
 
@@ -482,23 +483,4 @@ class Simulation:
                                     method = 'lm',
                                     args = [self])
         self.update_scaling(sol.x)
-                          
-
-'''
-def noisy(noise_type,image):
-    if noise_type == "gauss":
-        row,col,ch= image.shape
-        mean = 0
-        var = 0.1
-        sigma = var**0.5
-        gauss = np.random.normal(mean,sigma,(row,col,ch))
-        gauss = gauss.reshape(row,col,ch)
-        noisy = image + gauss
-        return noisy
-    elif noise_type == "poisson":
-        vals = len(np.unique(image))
-        vals = 2 ** np.ceil(np.log2(vals))
-        noisy = np.random.poisson(image * vals) / float(vals)
-        return noisy
-
-'''
+     

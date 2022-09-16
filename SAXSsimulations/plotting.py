@@ -151,7 +151,8 @@ def plot_simulation_vs_sas(simulation, uncertainty = 'ISigma'):
         plt.ylabel("q (1/nm)")
         plt.title('SasModels simulation')
         ax = axs[2]
-        im = ax.imshow(np.log10(binned_FTI-simulation.I_sas) , extent = [simulation.qx.min(), simulation.qx.max(), simulation.qx.min(), simulation.qx.max()] )
+        im = ax.imshow(binned_FTI-simulation.I_sas , extent = [simulation.qx.min(), simulation.qx.max(), simulation.qx.min(), simulation.qx.max()] )
+        plt.colorbar(im)
         plt.xlabel("q (1/nm)")
         plt.ylabel("q (1/nm)")
         plt.title('logged difference')
@@ -160,9 +161,9 @@ def plot_simulation_vs_sas(simulation, uncertainty = 'ISigma'):
 def plt_slices_sum(simulation):
     fig,axs = plt.subplots(1,3,figsize = (15,5))
     ax = axs[0]
-    im = ax.imshow(simulation.density.sum(axis=0))
+    im = ax.imshow(simulation.density.sum(axis=0).T)
     ax = axs[1]
-    im = ax.imshow(simulation.density.sum(axis=1))
+    im = ax.imshow(simulation.density.sum(axis=1).T)
     ax = axs[2]
     im = ax.imshow(simulation.density.sum(axis=2))
     plt.show()    
