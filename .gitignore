@@ -4,10 +4,8 @@ figures/
 FrEIA/
 data.py
 try_NN.ipynb
-
-
-
-
+mp_api.key
+MOF.h5
 
 
 ## Ignore Visual Studio temporary files, build results, and

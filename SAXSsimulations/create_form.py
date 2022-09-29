@@ -8,29 +8,23 @@ import sasmodels
 import sasmodels.core as core
 import sasmodels.direct_model as direct_model
 
+__all__ = ['DensityData', 'Simulation']
 
+#FIXME rename DensityData?????
 
-class Simulation:
-    def __init__(self, size, nPoints, volFrac = 0.05):
-        self.box_size = size
-        self.nPoints = nPoints
-        self.volume_fraction_threshold = volFrac
-        self.__initialize_box()
-      
-    ################################   The geometry functions   ################################
-    @property
-    def volume_fraction(self):
-        """ 
-        Volume fraction as a proportion of non-zero voxels to all voxels in a box
-        """
-        return int(self._box.sum())/self.nPoints**3
+class DensityData:
+    """
+    A class with Fourier Transform functionality. You can set any calculated density as an attribute and calculate FT with different  methods. 
+    """
+    def __init__(self):
+        pass
     
-    @property
-    def density(self):
+    def set_density(self, density):
         """
-        Because the box might be changed at any moment density is the copy of it 
+        set density matrix from numpy array. Calculate the number of points in first(!) dimension
         """
-        return self._box
+        self.density = torch.from_numpy(density)
+        self.nPoints = self.density.shape[0]
 
     @property
     def FTI(self):
@@ -39,53 +33,13 @@ class Simulation:
         """
         return self._FTI_custom
 
-    @property
-    def FTI_sinc(self):
-        """
-        Set the sinc'ed FTI
-        """
-        if 'FTI_slice_custom' in dir(self):
-            return self.__sinc(self.FTI_slice_custom)
-        else:
-            return self.__sinc(self.FTI_custom)
-
-
-    def __initialize_box(self):
-        """
-        Creates a 1D gridding and expands it into a 3D box filled with voxels of size 'grid_space'.
-        The box is symmetric around 0 on all axes with the predefined grid points. 
-        Calls a function to specify the 3D scattering angle Q
-
-        """
-        self.grid = torch.linspace(-self.box_size /2 , self.box_size /2, self.nPoints) 
-        self._box  = torch.zeros((self.nPoints,self.nPoints,self.nPoints), dtype = torch.float32)
-        self.grid_space = self.box_size/(self.nPoints-1)
-        self.__expand_Q()
-    
-    def __expand_Q(self):
-        """
-        convert a 1D array to the array of scattering angles and expand it 
-        to 3D reciprocal(?) space to get the scattering angle Q in nm-1
-
-        """
-        divLength = self.box_size/self.nPoints
-        self.qx = torch.linspace(-torch.pi/self.grid_space, torch.pi/self.grid_space, self.nPoints)
-        #qy = qx.clone()
-        #qz = qx.clone()
-        self._q2y = self.qx[None,:]
-        self._q2z = self.qx[:,None]
-
-        self._q3x = self.qx + 0 * self.qx[None,:,None] + 0 * self.qx[:,None,None]
-        self._q3y = 0 * self.qx + self.qx[None,:,None] + 0 * self.qx[:,None,None]
-        self._q3z = 0 * self.qx + 0 * self.qx[None,:,None] + self.qx[:,None,None]
-
-        self.Q = torch.sqrt(self._q3x**2 + self._q3y**2 + self._q3z**2)
-
-
     ################################   The Fourier Transformation functions   ################################
 
 
     def pin_memory(self):
+        """
+        Copies the tensor to pinned memory
+        """
         self.density.pin_memory()
 
 
@@ -141,6 +95,75 @@ class Simulation:
         FTI = torch.abs(FT_slice)**2
         self.FTI_slice_custom = FTI.cpu().detach()
         
+class Simulation(DensityData):
+
+    """ A proper simulation class inheriting FT functions from DensityData. Given size and the number of points in the simulation
+     it initializes empty simulation box and the scattering angle for each pixel. When volume fraction argument is passed, the shapes
+     will be placed into the box until that threshold is reached."""
+    def __init__(self, size, nPoints, volFrac = 0.05):
+        self.box_size = size
+        self.nPoints = nPoints
+        self.volume_fraction_threshold = volFrac
+        self.__initialize_box()
+        super(Simulation, self).__init__()
+
+      
+    ################################   The geometry functions   ################################
+    @property
+    def volume_fraction(self):
+        """ 
+        Calculates volume fraction as a proportion of non-zero voxels to all voxels in a box
+        """
+        return int(self._box.sum())/self.nPoints**3
+    
+    @property
+    def density(self):
+        """
+        Density is the copy of the simulated box, because the box might be changed at any moment 
+        """
+        return self._box
+
+    @property
+    def FTI_sinc(self):
+        """
+        Set the sinc'ed FTI
+        """
+        if 'FTI_slice_custom' in dir(self):
+            return self.__sinc(self.FTI_slice_custom)
+        else:
+            return self.__sinc(self.FTI_custom)
+
+    def __initialize_box(self):
+        """
+        Creates a 1D gridding and expands it into a 3D box filled with voxels of size 'grid_space'.
+        The box is symmetric around 0 on all axes with the predefined grid points. 
+        Calls a function to specify the 3D scattering angle Q
+
+        """
+        self.grid = torch.linspace(-self.box_size /2 , self.box_size /2, self.nPoints) 
+        self._box  = torch.zeros((self.nPoints,self.nPoints,self.nPoints), dtype = torch.float32)
+        self.grid_space = self.box_size/(self.nPoints-1)
+        self.__expand_Q()
+    
+    def __expand_Q(self):
+        """
+        convert a 1D array to the array of scattering angles and expand it 
+        to 3D reciprocal(?) space to get the scattering angle Q in nm-1
+
+        """
+        self.qx = torch.linspace(-torch.pi/self.grid_space, torch.pi/self.grid_space, self.nPoints)
+        #qy = qx.clone()
+        #qz = qx.clone()
+        self._q2y = self.qx[None,:]
+        self._q2z = self.qx[:,None]
+
+        self._q3x = self.qx + 0 * self.qx[None,:,None] + 0 * self.qx[:,None,None]
+        self._q3y = 0 * self.qx + self.qx[None,:,None] + 0 * self.qx[:,None,None]
+        self._q3z = 0 * self.qx + 0 * self.qx[None,:,None] + self.qx[:,None,None]
+
+        self.Q = torch.sqrt(self._q3x**2 + self._q3y**2 + self._q3z**2)
+
+
     def __sinc(self, FTI):
         """
         Applies the sinc function to the voxel and multiplies the result with the Fourier Transformed Structure. New attribute is 
@@ -151,8 +174,8 @@ class Simulation:
         else:
             self.sinc = torch.abs(torch.special.sinc(self._q3x*self.grid_space/2/np.pi)*torch.special.sinc(self._q3y*self.grid_space/2/np.pi)**torch.special.sinc(self._q3z*self.grid_space/2/np.pi))**2
         FTI_sinced = FTI * self.sinc
-        return FTI_sinced
-    
+        return FTI_sinced       
+
     ################################   The rebinnning functions   ################################
     
     def __determine_Error(self,row):
@@ -250,6 +273,10 @@ class Simulation:
             return binned_data[['Q', 'I', 'IStd', 'ISEM', 'IError', 'ISigma', 'QStd', 'QSEM', 'QSigma','qy', 'qy_sem', 'qz', 'qz_sem']]
 
     def __mask_FT_to_sphere(self):
+        """
+        The averaging in rebinning function is based on the angles present in the scattering angles Q matrix.The values in the matrix
+        have circular symmetry and the values in the corners of the matrix are underrepresented and will not be considered in the rebinning.
+        """
         x2x = self.grid[None,:]
         x2y = self.grid[:,None]
         radius = self.box_size//2
@@ -286,19 +313,14 @@ class Simulation:
 
     def __reBin_sphere(self, nbins, IEMin, QEMin, slice = 'center'):
         """
-        Unweighted rebinning funcionality with extended uncertainty estimation, adapted from the datamerge methods,
-        as implemented in Paulina's notebook of spring 2020.
-        Calls the function on each sliced and then aggregates again for the all-slices statistics.
+        For a sphere we consider a 1D rebinned curve. This function masks the relevant pixels (a sphere for a 3D instance and circle for a 2D)
+        to rebin with the general rebinning function.
         input: 
-            ft: 3D Fourier Transformed values
-            Q: 3D values of the scattering angle
-            nbins: how many bins shoould there be in a new data
+            nbins: how many bins should there be in a new data
             IEMin: coefficent used to determine ISigma
             QEMin: coefficent used to determine QSigma
             slice: if 'center' the central slice computed, if other integer, the slice at the integer is computed otherwise the 3D version is computed, 
-        output:
-            binned_data: pandas.DataFrame with the values of intensity I and scattering angle Q rebinned 
-            in specified intervals and other calculated statistics on it
+        
         """
         self.__mask_FT_to_sphere() # mask the Q to the sphere
         
@@ -352,6 +374,14 @@ class Simulation:
             self.binned_data.dropna(thresh=4, inplace=True) # empty rows appear because of groupping by index in accumulated data, which in turn consisted of self.binEdges, which are sometimes empty
 
     def __reBin_cylinder(self, nbins, IEMin, QEMin):
+        """
+        In the cylinder the final output is the 2D scattering pattern, because otherwise the angular data is lost. 
+        Only option to rebin the central slice exists. 
+        input: 
+            nbins: data will be rebinned into [nbins x nbins] matrix 
+            IEMin: coefficent used to determine ISigma
+            QEMin: coefficent used to determine QSigma
+        """
         
         Q_central_slice = self.Q[self.nPoints//2+1,:,:]
         qMin = float(self.qx[self.qx!=0].min())
@@ -374,6 +404,9 @@ class Simulation:
         self.binned_slice = self.__reBinSlice( df, bins_id, IEMin, QEMin)
 
     def reBin(self, nbins,IEMin=0.01, QEMin=0.01, slice = None):
+        """
+        depending on the shape of an object the proper function will be called
+        """
         self.nBins = nbins
         if self.shape == 'sphere':
             self.__reBin_sphere(nbins, IEMin, QEMin, slice)
@@ -391,12 +424,12 @@ class Simulation:
             self.binned_slice = self.binned_slice.iloc[1:]
         else:
             self.binned_data = self.binned_data.iloc[1:]
-
-
-
     ################################   The SasModels functions   ################################
 
-    def init_sas_model(self, IEmin=0.01):
+    def init_sas_model(self):
+        """
+        Initialize an analytical SasModels simulation for a shape simulated before with matching parameters. 
+        """
         try:
             self.model = core.load_model(self.shape)
 
@@ -423,14 +456,14 @@ class Simulation:
                 })
         elif self.shape =='cylinder':
             self.modelParameters_sas.update({
-                'radius': self.rMean, 
+                'radius': self.rMean*10, 
                 'background':0., 
                 'sld':1.,
                 'sld_solvent':0.,
                 'radius_pd': self.rWidth/self.rMean, 
                 'radius_pd_type': 'gaussian', 
                 'radius_pd_n': 35, 
-                'length': self.hMean, 
+                'length': self.hMean*10, 
                 'length_pd': self.hWidth/self.hMean, 
                 'length_pd_type': 'gaussian', 
                 'length_pd_n': 35,          
@@ -438,7 +471,7 @@ class Simulation:
                 'theta_pd': self.rotWidth if not self.theta_all else np.abs(self.rotWidth/np.mean(self.theta_all)) ,
                 'theta_pd_type':self.theta_distribution,
                 'theta_pd_n':10,
-                'phi':90-self.phi,
+                'phi':90+self.phi,
                 'phi_pd': self.rotWidth if not self.phi_all else np.abs(self.rotWidth/np.mean(self.phi_all)),
                 'phi_pd_type':self.phi_distribution,
                 'phi_pd_n':10
@@ -446,6 +479,9 @@ class Simulation:
         self.__create_sas_model()
                 
     def __create_sas_model(self):
+        """
+        The core SasModel function to create a simulation. creates a kernel for scatterig angles represented in the simulation before.
+        """
         if self.shape == 'sphere':
             self.kernel=self.model.make_kernel(self.Q_sas)
             self.I_sas = direct_model.call_kernel(self.kernel, self.modelParameters_sas)
@@ -465,11 +501,17 @@ class Simulation:
 
 
     def update_scaling(self, value):
+        """
+        Updates the scaling factor of SasModels simulation
+        """
         self.modelParameters_sas.update({'scale':value})
         self.__create_sas_model()
     
 
     def Chi_squared_norm(self, uncertainty):
+        """
+        Calculate the Chi squared error between analytical SasModels simulation and the manual 3D one.
+        """
         if self.shape == 'sphere':
             chi_squared = ((self.I_sas - self.binned_slice['I'])**2/self.binned_slice[uncertainty]**2).sum() 
             return chi_squared / (len(self.I_sas) - 1)
@@ -478,9 +520,17 @@ class Simulation:
             return chi_squared / ( self.I_sas.shape[0]*self.I_sas.shape[1] - 1)
 
     def optimize_scaling(self):
+        """
+        Optimizes the scaling factor of the SasModel simulation. Uses Scikit-learn least squares method, Levenberg-Marquardt algorithm
+        with linear loss(not the chi squared as i sasModels because this combination is no possible in Scikit, but still ives good results.
+        The function to optimize is simply the difference between SasModels and manual 3D simulations.  )
+        """
         sol = scipy.optimize.least_squares(fun = Intensity_func, 
                                     x0 = self.modelParameters_sas['scale'], 
                                     method = 'lm',
                                     args = [self])
         self.update_scaling(sol.x)
      
+
+
+  

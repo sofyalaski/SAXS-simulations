@@ -6,6 +6,14 @@ from SAXSsimulations.utils import compute_error
 
 
 def plot_slices(density,grid, direction  = 'x', path = None):
+    """ 
+    plots 5 evenly spaced slices of the 3D entity
+    input: 
+        density: the 3D entity to plot
+        grid: grid points of the entity to plot, used for labeling axes
+        direction: choose between 'x/y/z' to plots slices on specific diension of the 3D entity
+        path: path to save figure 
+    """
     nPoints = density.shape[0]
     fig,axs = plt.subplots(1,5,figsize = (20,10))
     
@@ -27,6 +35,14 @@ def plot_slices(density,grid, direction  = 'x', path = None):
         plt.show()
     
 def plot_3D_structure(entity, grid, realspace = True, path = None):
+    """ 
+    plots the full 3D structure
+    input: 
+        entity: the 3D entity to plot
+        grid: grid points of the entity to plot, used for labeling axes
+        realspace[boolean]: if True considered to be density, if false, the Fourier Transform, values are log-values
+        path: path to save figure 
+    """
     nPoints = entity.shape[0]
     fig = plt.figure(figsize = (10,10))
     ax = plt.axes(projection ='3d')
@@ -65,13 +81,22 @@ def plot_3D_structure(entity, grid, realspace = True, path = None):
         plt.show()
 
 def plot_FTI_version(custom_version, torch_version, qx, slice_number = None, path = None):
+    """ 
+    plots custom FTI version versus the torch's and prints out the highest pixel-wise difference
+    input: 
+        custom_version: the instance with the FT calculatd a custom way
+        torch_version: the instance with the FT calculatd with torch
+        qx: scattering angles grid points of the entity to plot, used for labeling axes
+        slice_number: the slice to plot, if not specified - central
+        path: path to save figure 
+    """
     # just another round to compare
     custom_version = custom_version.numpy()
     torch_version = torch_version.numpy()
-    difference = compute_error(custom_version.numpy(),torch_version.numpy())
+    difference = compute_error(custom_version,torch_version)
     print('the maximal difference between the implementation of the FTI is {}'.format(difference.max()))
     if not slice_number:
-        slice_number = np.random.randint(low = 0, high = custom_version.shape[0])
+        slice_number = custom_version.shape[0]//2+1
     
     fig,axs = plt.subplots(1,2,figsize = (20,10))
     ax = axs[0]
@@ -88,30 +113,15 @@ def plot_FTI_version(custom_version, torch_version, qx, slice_number = None, pat
         plt.suptitle("Comparison of the Fourier Transforms at slice {sl} calculated a custom way\nby 2D slices + final 1D FT and the torch's fftn".format(sl = slice_number))
         plt.show()
 
-
-def plot_FTI_version_center(custom_version, torch_version, qx,  path = None):
-    # just another round to compare
-    custom_version = custom_version.numpy()
-    torch_version = torch_version.numpy()
-    difference = compute_error(custom_version,torch_version)
-    print('the maximal difference between the implementation of the FTI is {}'.format(difference.max()))
-
-    fig,axs = plt.subplots(1,2,figsize = (20,10))
-    ax = axs[0]
-    im = ax.imshow(np.log(custom_version), cmap = 'Greys',  extent = [qx.min(), qx.max(), qx.min(), qx.max()])
-    ax.set_title('custom fft ')
-    ax = axs[1]
-    im = ax.imshow(np.log(torch_version), cmap = 'Greys',  extent = [qx.min(), qx.max(), qx.min(), qx.max()])
-    ax.set_title('fftn')
-    plt.colorbar(im, ax = axs.ravel().tolist(), shrink=0.8, location = 'left')
-    if path:
-        plt.savefig(path)
-        plt.close()
-    else:
-        plt.suptitle("Comparison of the Fourier Transforms at central slice calculated a custom way\nby 2D slices + final 1D FT and the torch's fftn")
-        plt.show()   
     
-def plot_Q_vs_I(binned_data,xlim = None, path = None):
+def plot_Q_vs_I(binned_data, xlim = None, path = None):
+    """
+    After the rebinning procedure plot Intensity I vs the scattering angle Q on log-scale
+    input:
+        pandas DataFrame with calculated values
+        xlim(optional) : the limit of the x-axis
+        path(optional) : path to save figure
+    """
     binned_data.plot('Q', 'I', yerr = 'IError', 
             figsize=(6,6),logx = True, logy = True, xlabel = 'q', ylabel = 'I', title = 'rebinned Q vs I')
     if xlim:
@@ -124,6 +134,12 @@ def plot_Q_vs_I(binned_data,xlim = None, path = None):
     
 
 def plot_simulation_vs_sas(simulation, uncertainty = 'ISigma'):
+    """
+    Plot Intensity I vs the scattering angle Q on log-scale for manual 3D simulation and an analytical SasModels
+    input:
+        simulation: a class instance with calculated attributes
+        uncertainty: The value to plot as uncertainty
+    """
     if simulation.shape == 'sphere':
         plt.plot(simulation.qx_sas, simulation.I_sas, '-', color = 'red', label = 'SasView')
         if 'binned_slice' in dir(simulation):
@@ -159,6 +175,11 @@ def plot_simulation_vs_sas(simulation, uncertainty = 'ISigma'):
 
 
 def plt_slices_sum(simulation):
+    """
+    Plots the simulated density summed onto one of the dimensions x/y/z.
+    input:
+        simulationa : class instance with calculated attributes
+    """
     fig,axs = plt.subplots(1,3,figsize = (15,5))
     ax = axs[0]
     im = ax.imshow(simulation.density.sum(axis=0).T)
@@ -169,6 +190,14 @@ def plt_slices_sum(simulation):
     plt.show()    
 
 def plot_slices_at_interval(interval,i,simulation, direction):
+    """
+    Plots 10 slices of the simulated density on given interval in given direction.
+    input:
+        interval : interval to plot slices
+        i: start intervals from the slice #i
+        simulation : class instance with calculated attributes
+        direction: x/y/z axis
+    """
     fig,axs = plt.subplots(1,10,figsize = (20,10))
     for t in range(10):
         ax = axs[t]
@@ -180,6 +209,24 @@ def plot_slices_at_interval(interval,i,simulation, direction):
             ax.imshow(simulation.density[:,:,i +t*interval ])
     
 
+def plt_slices_ft(simulation, vmin, vmax):
+    """
+    Plots central slices of the Fourier transform given all dimensions x/y/z.
+    input:
+        simulation : class instance with calculated attributes
+        vmin : specify the logged min of the values
+        vmax: specify the logged max of the values
+    """
+    fig,axs = plt.subplots(1,3,figsize = (15,5))
+    ax = axs[0]
+    im = ax.imshow(np.log(simulation._FTI_custom[simulation._FTI_custom.shape[0]//2+1,:,:]), cmap = 'Greys', vmin = vmin, vmax = vmax)
+    ax = axs[1]
+    im = ax.imshow(np.log(simulation._FTI_custom[:,simulation._FTI_custom.shape[1]//2+1,:]), cmap = 'Greys', vmin = vmin, vmax = vmax)
+    ax = axs[2]
+    im = ax.imshow(np.log(simulation._FTI_custom[:,:,simulation._FTI_custom.shape[2]//2+1]), cmap = 'Greys', vmin = vmin, vmax = vmax)
+    plt.show()    
+
 def plot_2d_sas(Intensity_2D_sas):
+    """ plot 2D SasModels simulation"""
     plt.imshow(np.log10(Intensity_2D_sas))
     plt.colorbar()
