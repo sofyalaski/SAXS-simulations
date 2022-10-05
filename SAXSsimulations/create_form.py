@@ -1,3 +1,4 @@
+from matplotlib import Scalar
 import numpy as np
 import pandas as pd
 import torch
@@ -14,14 +15,17 @@ __all__ = ['DensityData', 'Simulation']
 
 class DensityData:
     """
-    A class with Fourier Transform functionality. You can set any calculated density as an attribute and calculate FT with different  methods. 
+    A class with Fourier Transform functionality. You can set any calculated 
+    density as an attribute and calculate FT with different methods. 
     """
-    def __init__(self):
+
+    def __init__(self)->None:
         pass
     
-    def set_density(self, density):
+    def set_density(self, density:np.ndarray)->None:
         """
-        set density matrix from numpy array. Calculate the number of points in first(!) dimension
+        set density matrix from numpy array.
+        Calculate the number of points in first(!) dimension
         """
         self.density = torch.from_numpy(density)
         self.nPoints = self.density.shape[0]
@@ -33,17 +37,15 @@ class DensityData:
         """
         return self._FTI_custom
 
-    ################################   The Fourier Transformation functions   ################################
+    #   The Fourier Transformation functions   #
 
-
-    def pin_memory(self):
+    def pin_memory(self)->None:
         """
         Copies the tensor to pinned memory
         """
         self.density.pin_memory()
 
-
-    def calculate_torch_FTI_3D(self, device = 'cuda', slice = None):
+    def calculate_torch_FTI_3D(self, device:str='cuda', slice:int=None)->None:
         """
         Calculates Fourier transform of a 3D box with torch fftn and shifts to nyquist frequency
         input:
@@ -51,15 +53,15 @@ class DensityData:
             slice: if None, the central slice will be assigned to the attribute FTI_slice_torch
         """
         density = self.density.to(device)
-        FT = torch.fft.fftn(density, norm = 'forward')
+        FT = torch.fft.fftn(density, norm='forward')
         FT = torch.fft.fftshift(FT)
         FTI = torch.abs(FT)**2
         self.FTI_torch = FTI.cpu().detach()
         if slice is None:
-            slice = self.nPoints//2+1
+            slice = self.nPoints//2+1 
         self.FTI_slice_torch = self.FTI_torch[slice,:,:]
     
-    def calculate_custom_FTI_3D(self, device = 'cuda'):
+    def calculate_custom_FTI_3D(self, device:str='cuda')->None:
         """
         calculate the 3D FFT via 2D FFT and then the last 1D FFT
         """
@@ -75,7 +77,7 @@ class DensityData:
         FTI = torch.abs(FT)**2
         self._FTI_custom = FTI.cpu().detach()
 
-    def calculate_custom_FTI_3D_slice(self, device = 'cuda', slice = None):
+    def calculate_custom_FTI_3D_slice(self, device:str='cuda', slice:int=None)->None:
         """
         calculate the 3D FFT AT CERTAIN SLICE via 2D FFT and then the last 1D FFT
         input:
@@ -100,31 +102,30 @@ class Simulation(DensityData):
     """ A proper simulation class inheriting FT functions from DensityData. Given size and the number of points in the simulation
      it initializes empty simulation box and the scattering angle for each pixel. When volume fraction argument is passed, the shapes
      will be placed into the box until that threshold is reached."""
-    def __init__(self, size, nPoints, volFrac = 0.05):
+    def __init__(self, size, nPoints:int, volFrac:float=0.05)->None:
         self.box_size = size
         self.nPoints = nPoints
         self.volume_fraction_threshold = volFrac
         self.__initialize_box()
         super(Simulation, self).__init__()
 
-      
     ################################   The geometry functions   ################################
     @property
-    def volume_fraction(self):
+    def volume_fraction(self)->float:
         """ 
         Calculates volume fraction as a proportion of non-zero voxels to all voxels in a box
         """
         return int(self._box.sum())/self.nPoints**3
     
     @property
-    def density(self):
+    def density(self)->np.ndarray:
         """
         Density is the copy of the simulated box, because the box might be changed at any moment 
         """
         return self._box
 
     @property
-    def FTI_sinc(self):
+    def FTI_sinc(self)->np.ndarray:
         """
         Set the sinc'ed FTI
         """
@@ -133,7 +134,7 @@ class Simulation(DensityData):
         else:
             return self.__sinc(self.FTI_custom)
 
-    def __initialize_box(self):
+    def __initialize_box(self)->None:
         """
         Creates a 1D gridding and expands it into a 3D box filled with voxels of size 'grid_space'.
         The box is symmetric around 0 on all axes with the predefined grid points. 
@@ -145,7 +146,7 @@ class Simulation(DensityData):
         self.grid_space = self.box_size/(self.nPoints-1)
         self.__expand_Q()
     
-    def __expand_Q(self):
+    def __expand_Q(self)->None:
         """
         convert a 1D array to the array of scattering angles and expand it 
         to 3D reciprocal(?) space to get the scattering angle Q in nm-1
@@ -164,7 +165,7 @@ class Simulation(DensityData):
         self.Q = torch.sqrt(self._q3x**2 + self._q3y**2 + self._q3z**2)
 
 
-    def __sinc(self, FTI):
+    def __sinc(self, FTI: np.ndarray)->np.ndarray:
         """
         Applies the sinc function to the voxel and multiplies the result with the Fourier Transformed Structure. New attribute is 
         created as a convolution of sinc'ed voxel with the Fourier Transform of the structure
@@ -178,7 +179,7 @@ class Simulation(DensityData):
 
     ################################   The rebinnning functions   ################################
     
-    def __determine_Error(self,row):
+    def __determine_Error(self, row:pd.Series)->float: 
         """ Given pandas.Series of Intesity I or scattering angle Q return the Error calculated as sum of 
         squared root of sum of squared values normaized by number of measurments. If a bin is empty returns NaN."""
         if row.empty:
@@ -186,7 +187,7 @@ class Simulation(DensityData):
         else:
             return np.sqrt((row**2).sum())/ len(row)
 
-    def __determine_std(self,row):
+    def __determine_std(self, row:pd.Series)->float: # row is... pandas dataframe?
         """ Given pandas.Series of Intesity I or scattering angle Q return the standard deviation of the Series 
         or a value itself if only one values falls into the bin """
         if len(row) == 1:
@@ -194,7 +195,7 @@ class Simulation(DensityData):
         else:
             return row.std(ddof = 1, skipna = True)
 
-    def __determine_sem(self, row):
+    def __determine_sem(self, row:pd.Series):
         """ Given pandas.Series of Intesity I or scattering angle Q return the standard error of the mean of the Series 
         or a value itself if only one values falls into the bin """
         if len(row) == 1:
@@ -202,12 +203,12 @@ class Simulation(DensityData):
         else:
             return row.sem(ddof = 1, skipna = True)
 
-    def __determine_ISigma(self, df, IEMin):
+    def __determine_ISigma(self, df, IEMin)->np.ndarray:
         """ Given pandas.Series of Intesity I return the maximum  within the Error of I, standard error of the mean of I or 
         the value of I multiplie by some coefficient IEmin"""
         return np.max([df.ISEM, df.IError, df.I*IEMin])
 
-    def __determine_QSigma(self, df, QEMin):
+    def __determine_QSigma(self, df, QEMin)->np.ndarray:
         """ Given pandas.Series of scattering angle Q return the maximum  within the Error of Q(if presen), standard error 
         of the mean of Q or the value of Q multiplie by some coefficient QEmin"""
         if 'QError' in df.index:
@@ -215,7 +216,7 @@ class Simulation(DensityData):
         else:
             return np.max([df.QSEM, df.Q*QEMin])
 
-    def __reBinSlice(self, df, bins, IEMin, QEMin):
+    def __reBinSlice(self, df, bins, IEMin, QEMin)->pd.DataFrame:
 
         """
         Unweighted rebinning funcionality with extended uncertainty estimation, adapted from the datamerge methods,
@@ -271,8 +272,10 @@ class Simulation(DensityData):
             return binned_data[['Q', 'I', 'IStd', 'ISEM', 'IError', 'ISigma', 'QStd', 'QSEM', 'QSigma']]
         elif self.shape == 'cylinder':
             return binned_data[['Q', 'I', 'IStd', 'ISEM', 'IError', 'ISigma', 'QStd', 'QSEM', 'QSigma','qy', 'qy_sem', 'qz', 'qz_sem']]
+        else: # should not happen
+            assert False, f'{self.shape=} not part of implemented shapes'
 
-    def __mask_FT_to_sphere(self):
+    def __mask_FT_to_sphere(self)->None:
         """
         The averaging in rebinning function is based on the angles present in the scattering angles Q matrix.The values in the matrix
         have circular symmetry and the values in the corners of the matrix are underrepresented and will not be considered in the rebinning.
@@ -311,7 +314,7 @@ class Simulation(DensityData):
             self.Q_masked = torch.where(mask.density, self.Q, np.nan)
 
 
-    def __reBin_sphere(self, nbins, IEMin, QEMin, slice = 'center'):
+    def __reBin_sphere(self, nbins:int, IEMin, QEMin, slice='center')->None: # slice changes type from string to int
         """
         For a sphere we consider a 1D rebinned curve. This function masks the relevant pixels (a sphere for a 3D instance and circle for a 2D)
         to rebin with the general rebinning function.
@@ -373,7 +376,7 @@ class Simulation(DensityData):
             self.binned_data['QSigma'] = self.binned_data.apply(lambda x: self.__determine_QSigma(x, QEMin), axis = 1) 
             self.binned_data.dropna(thresh=4, inplace=True) # empty rows appear because of groupping by index in accumulated data, which in turn consisted of self.binEdges, which are sometimes empty
 
-    def __reBin_cylinder(self, nbins, IEMin, QEMin):
+    def __reBin_cylinder(self, nbins:int, IEMin, QEMin) ->None:
         """
         In the cylinder the final output is the 2D scattering pattern, because otherwise the angular data is lost. 
         Only option to rebin the central slice exists. 
@@ -403,7 +406,7 @@ class Simulation(DensityData):
         
         self.binned_slice = self.__reBinSlice( df, bins_id, IEMin, QEMin)
 
-    def reBin(self, nbins,IEMin=0.01, QEMin=0.01, slice = None):
+    def reBin(self, nbins:int,IEMin=0.01, QEMin=0.01, slice = None)->None:
         """
         depending on the shape of an object the proper function will be called
         """
@@ -413,9 +416,7 @@ class Simulation(DensityData):
         elif self.shape == 'cylinder':
             self.__reBin_cylinder(nbins, IEMin, QEMin)
 
-
-
-    def drop_first_bin(self ):
+    def drop_first_bin(self)->None:
         """
         Drops first bin in the rebinned data frime, because it's not needed for our purposes and has way too small scattering angle Q compared to the rest of bins.
         If slice  of 3D Fourier Transform was created only, operates on that slice, otherwise on whole data.
@@ -424,9 +425,10 @@ class Simulation(DensityData):
             self.binned_slice = self.binned_slice.iloc[1:]
         else:
             self.binned_data = self.binned_data.iloc[1:]
+
     ################################   The SasModels functions   ################################
 
-    def init_sas_model(self):
+    def init_sas_model(self)->None:
         """
         Initialize an analytical SasModels simulation for a shape simulated before with matching parameters. 
         """
@@ -478,7 +480,7 @@ class Simulation(DensityData):
                 })
         self.__create_sas_model()
                 
-    def __create_sas_model(self):
+    def __create_sas_model(self)->None:
         """
         The core SasModel function to create a simulation. creates a kernel for scatterig angles represented in the simulation before.
         """
@@ -500,7 +502,7 @@ class Simulation(DensityData):
         self.model.release()
 
 
-    def update_scaling(self, value):
+    def update_scaling(self, value:float)->None:
         """
         Updates the scaling factor of SasModels simulation
         """
@@ -508,7 +510,7 @@ class Simulation(DensityData):
         self.__create_sas_model()
     
 
-    def Chi_squared_norm(self, uncertainty):
+    def Chi_squared_norm(self, uncertainty)->float:
         """
         Calculate the Chi squared error between analytical SasModels simulation and the manual 3D one.
         """
@@ -518,8 +520,10 @@ class Simulation(DensityData):
         elif self.shape == 'cylinder':
             chi_squared = ((self.I_sas.flatten() - self.binned_slice['I'])**2/self.binned_slice[uncertainty]**2).sum() 
             return chi_squared / ( self.I_sas.shape[0]*self.I_sas.shape[1] - 1)
+        else: # should not happen
+            assert False, f'{self.shape=} not part of implemented shapes'
 
-    def optimize_scaling(self):
+    def optimize_scaling(self)->None:
         """
         Optimizes the scaling factor of the SasModel simulation. Uses Scikit-learn least squares method, Levenberg-Marquardt algorithm
         with linear loss(not the chi squared as i sasModels because this combination is no possible in Scikit, but still ives good results.
