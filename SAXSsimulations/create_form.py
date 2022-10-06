@@ -151,7 +151,8 @@ class Simulation(DensityData):
         to 3D reciprocal(?) space to get the scattering angle Q in nm-1
 
         """
-        self.qx = torch.linspace(-torch.pi/self.grid_space, torch.pi/self.grid_space, self.nPoints)
+        voxel_centers_dist = self.box_size/self.nPoints
+        self.qx = torch.linspace(-torch.pi/voxel_centers_dist, torch.pi/voxel_centers_dist, self.nPoints)
         #qy = qx.clone()
         #qz = qx.clone()
         self._q2y = self.qx[None,:]

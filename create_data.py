@@ -101,7 +101,7 @@ class Hdf:
 
     def __init_sas_model(self):
         model = core.load_model(self.shape)
-        self.qx_sas = np.linspace(-np.pi/self.size/2, np.pi/self.size/2, 512)
+        self.qx_sas = np.linspace(-np.pi/self.size/2, np.pi/self.size/2, 256)
 
         q2y = self.qx_sas + 0* self.qx_sas[:,np.newaxis]
         q2z = self.qx_sas[:,np.newaxis] + 0* self.qx_sas
@@ -111,7 +111,7 @@ class Hdf:
         modelParameters_sas = model.info.parameters.defaults.copy()
         modelParameters_sas.update(self.parameters_dict)
         self.I_sas = direct_model.call_kernel(kernel, modelParameters_sas)
-        self.I_sas = self.I_sas.reshape(512,512)
+        self.I_sas = self.I_sas.reshape(256,256)
         model.release()
         self.I_noisy = self.I_sas + np.random.poisson(self.I_sas) # adding some poison noise
 

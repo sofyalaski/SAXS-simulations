@@ -6,6 +6,8 @@ data.py
 try_NN.ipynb
 mp_api.key
 MOF.h5
+test_simulations_sas.ipynb
+debugging.ipynb
 
 
 ## Ignore Visual Studio temporary files, build results, and

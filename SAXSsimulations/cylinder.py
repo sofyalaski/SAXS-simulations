@@ -116,74 +116,8 @@ class Cylinder(Simulation):
                         .format(vf = self.volume_fraction, h = height, r = radius, cx=center[0], cy = center[1], cz = center[2], phi = phi, theta = theta))
                     attempt+=1
 
-    def __points_in_cylinder(self, pt1, pt2, r, q):
-        vec = pt2 - pt1
-        const = r * np.linalg.norm(vec)
-        return np.array((np.dot(q - pt1, vec) >= 0) * (np.dot(q - pt2, vec) <= 0) *(np.linalg.norm(np.cross(q - pt1, vec), axis=1) <= const), dtype=float)
-
-    def edge_pbc(self,pt1, pt2, r, edge_current):
-        edge_plane = np.vstack(np.meshgrid(edge_current[0], edge_current[1], edge_current[2])).reshape(3,-1).T
-        edge_density = self.__points_in_cylinder(pt1, pt2, r, edge_plane)
-        if edge_density.sum()>0: #the edge of the box will contain a density of a cylinder: pbc will not hold!
-            self.pbc = False
 
             
-
-    def __cylinder_pbc(self, pt1, pt2, r ):
-        self.pbc = True
-        edge = [self.grid,self.grid,self.grid]
-        for d in range(3):
-            edge_current = edge.copy()
-            edge_current[d] = float(self.grid.min())
-            self.edge_pbc(pt1,pt2,r,edge_current)
-            if not self.pbc:
-                break
-            edge_current[d] = float(self.grid.max())
-            self.edge_pbc(pt1,pt2,r,edge_current)
-            if not self.pbc:
-                break
-
-            
-
-    def __generate_cylinder(self, radius, height, center, theta, phi):
-        
-        coords = np.array(np.meshgrid(self.grid, self.grid, self.grid))
-        coordsArr = np.vstack(coords).reshape(3,-1).T
-        pointO = np.array([center[0], center[1],center[2] + height*np.cos(np.deg2rad(theta))])
-        cylinder_end = [center[0]+np.cos(np.deg2rad(phi/2))*2*height*np.sin(np.deg2rad(theta))* np.sin(np.deg2rad(phi/2)) , 
-                        center[1]+np.sin(np.deg2rad(theta))*height-np.sin(np.deg2rad(phi/2))*2*height*np.sin(np.deg2rad(theta))* np.sin(np.deg2rad(phi/2)), 
-                        center[2]+np.cos(np.deg2rad(theta))*height]
-        self.__cylinder_pbc(center, cylinder_end, radius)
-        if  self.pbc:
-            cylinder = self.__points_in_cylinder(pt1 = center, pt2 = np.array(cylinder_end), r=radius, q=coordsArr)
-            cylinder = np.array(cylinder).reshape(self.nPoints, self.nPoints, self.nPoints)
-            self._box = np.logical_or(self._box, torch.from_numpy(cylinder).to(torch.bool))
-
-
-  
-    def save_data(self, uncertainty = "ISigma", directory='.', for_SasView = True):
-        """
-        Saves .dat file. If slice  of 3D Fourier Transform was created only, operates on that slice, otherwise on whole data.
-        input:
-            directory to save
-            for_SasView: boolean, if True converts Q and I to SASView compartible values: Armstrong^-1 for Q and (m*sr)^-1.
-        """
-        Q = self.Q[self.nPoints//2+1,:,:].numpy()
-        data = pd.DataFrame({'Qx': self.binned_slice['qy'], 
-                             'Qy': self.binned_slice['qz'],
-                             'I': self.binned_slice['I'], 
-                             'ISigma': self.binned_slice[uncertainty]})
-        if for_SasView:
-            data.assign(Qx = data.Qx/10, Qy = data.Qy/10, I = data.I/100, ISigma = data.ISigma/100).to_csv(directory+'/polydispersed_cylinders_{r}_{h}.dat'.
-            format(r = int(self.rMean*1000), h = int(self.hMean*1000)), header=None, index=None, columns=["Qx", "Qy", "I", uncertainty])
-        else:
-            data.to_csv(directory+'/polydispersed_cylinders_{r}_{h}.dat'.
-            format(r = int(self.rMean*1000), h = int(self.hMean*1000)), header=None, index=None, columns=["Qx", "Qy", "I", uncertainty])
-
-    
-
-'''
-
     def __create_slice(self, height, r_theta,r_phi, center, theta, phi, d, cap_start,cap_small, direction_right, check):
         """
         Creates a slice of a cyllinder:
@@ -202,11 +136,11 @@ class Cylinder(Simulation):
             "touch" borders of the simulation box or not be present in a box at all.
         """
         if direction_right:
-            center_y = center[1] + safe_multiplier(d,np.tan(np.deg2rad(phi))) if phi !=0 else center[1] # because of the theta rotation the y-coordinate of center at fixed x  slice shifts
-            center_z = center[2] + safe_multiplier(d,np.tan(np.deg2rad(theta))) if theta !=0 else center[2] # because of phi rotation the z-coordinate of center at fixed x shifts
+            center_y = center[1] + safe_dividend(d,np.tan(np.deg2rad(phi))) if phi !=0 else center[1] # because of the theta rotation the y-coordinate of center at fixed x  slice shifts
+            center_z = center[2] + safe_dividend(d,np.tan(np.deg2rad(theta))) if theta !=0 else center[2] # because of phi rotation the z-coordinate of center at fixed x shifts
         else:
-            center_y = center[1] - safe_multiplier(d,np.tan(np.deg2rad(phi))) if phi !=0 else center[1]
-            center_z = center[2] - safe_multiplier(d,np.tan(np.deg2rad(theta))) if theta !=0 else center[2] 
+            center_y = center[1] - safe_dividend(d,np.tan(np.deg2rad(phi))) if phi !=0 else center[1]
+            center_z = center[2] - safe_dividend(d,np.tan(np.deg2rad(theta))) if theta !=0 else center[2] 
         x2y = self.grid[None,:]
         x2z = self.grid[:,None]
         mask = ((x2y-center_y)**2/r_phi**2 + (x2z-center_z)**2/r_theta**2 <=1).type(torch.bool)
@@ -325,5 +259,71 @@ class Cylinder(Simulation):
                 mask,_ = self.__create_slice(height, radius_at_theta,radius_at_phi, center, theta, phi, d2,  cap_start, cap_small, direction_right = False, check = False)
                 self._box[nearest_bigger_ind-1-i,mask] = 1
         return True
+  
+    def save_data(self, uncertainty = "ISigma", directory='.', for_SasView = True):
+        """
+        Saves .dat file. If slice  of 3D Fourier Transform was created only, operates on that slice, otherwise on whole data.
+        input:
+            directory to save
+            for_SasView: boolean, if True converts Q and I to SASView compartible values: Armstrong^-1 for Q and (m*sr)^-1.
+        """
+        Q = self.Q[self.nPoints//2+1,:,:].numpy()
+        data = pd.DataFrame({'Qx': self.binned_slice['qy'], 
+                             'Qy': self.binned_slice['qz'],
+                             'I': self.binned_slice['I'], 
+                             'ISigma': self.binned_slice[uncertainty]})
+        if for_SasView:
+            data.assign(Qx = data.Qx/10, Qy = data.Qy/10, I = data.I/100, ISigma = data.ISigma/100).to_csv(directory+'/polydispersed_cylinders_{r}_{h}.dat'.
+            format(r = int(self.rMean*1000), h = int(self.hMean*1000)), header=None, index=None, columns=["Qx", "Qy", "I", uncertainty])
+        else:
+            data.to_csv(directory+'/polydispersed_cylinders_{r}_{h}.dat'.
+            format(r = int(self.rMean*1000), h = int(self.hMean*1000)), header=None, index=None, columns=["Qx", "Qy", "I", uncertainty])
+
+    
+
+'''
+
+    def __points_in_cylinder(self, pt1, pt2, r, q):
+        vec = pt2 - pt1
+        const = r * np.linalg.norm(vec)
+        return np.array((np.dot(q - pt1, vec) >= 0) * (np.dot(q - pt2, vec) <= 0) *(np.linalg.norm(np.cross(q - pt1, vec), axis=1) <= const), dtype=float)
+
+    def edge_pbc(self,pt1, pt2, r, edge_current):
+        edge_plane = np.vstack(np.meshgrid(edge_current[0], edge_current[1], edge_current[2])).reshape(3,-1).T
+        edge_density = self.__points_in_cylinder(pt1, pt2, r, edge_plane)
+        if edge_density.sum()>0: #the edge of the box will contain a density of a cylinder: pbc will not hold!
+            self.pbc = False
+
+    def __cylinder_pbc(self, pt1, pt2, r ):
+        self.pbc = True
+        edge = [self.grid,self.grid,self.grid]
+        for d in range(3):
+            edge_current = edge.copy()
+            edge_current[d] = float(self.grid.min())
+            self.edge_pbc(pt1,pt2,r,edge_current)
+            if not self.pbc:
+                break
+            edge_current[d] = float(self.grid.max())
+            self.edge_pbc(pt1,pt2,r,edge_current)
+            if not self.pbc:
+                break
+
+            
+
+    def __generate_cylinder(self, radius, height, center, theta, phi):
+        
+        coords = np.array(np.meshgrid(self.grid, self.grid, self.grid))
+        coordsArr = np.vstack(coords).reshape(3,-1).T
+        pointO = np.array([center[0], center[1],center[2] + height*np.cos(np.deg2rad(theta))])
+        cylinder_end = [center[0]+np.cos(np.deg2rad(phi/2))*2*height*np.sin(np.deg2rad(theta))* np.sin(np.deg2rad(phi/2)) , 
+                        center[1]+np.sin(np.deg2rad(theta))*height-np.sin(np.deg2rad(phi/2))*2*height*np.sin(np.deg2rad(theta))* np.sin(np.deg2rad(phi/2)), 
+                        center[2]+np.cos(np.deg2rad(theta))*height]
+        self.__cylinder_pbc(center, cylinder_end, radius)
+        if  self.pbc:
+            cylinder = self.__points_in_cylinder(pt1 = center, pt2 = np.array(cylinder_end), r=radius, q=coordsArr)
+            cylinder = np.array(cylinder).reshape(self.nPoints, self.nPoints, self.nPoints)
+            self._box = np.logical_or(self._box, torch.from_numpy(cylinder).to(torch.bool))
+
+
         
 '''
