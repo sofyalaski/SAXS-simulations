@@ -29,3 +29,13 @@ def Intensity_func(scale, simulation):
             return simulation.binned_data.I.values - simulation.I_sas*scale
     else:
         return simulation.binned_slice.I - (simulation.I_sas*scale).flatten()
+
+def solve_quadratic_eq_positive(a,b,c):
+    sol1 = (-b +np.sqrt(b**2-4*a*c))/(2*a)
+    sol2 = (-b -np.sqrt(b**2-4*a*c))/(2*a)
+    solutions = []
+    if sol1 >0:
+        solutions.append(sol1)
+    if sol2 > 0:
+        solutions.append(sol2)
+    return solutions

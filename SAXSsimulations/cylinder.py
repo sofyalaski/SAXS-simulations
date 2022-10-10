@@ -5,8 +5,8 @@ import torch
 import matplotlib.pyplot as plt
 import math
 from SAXSsimulations.create_form import Simulation
-from SAXSsimulations.utils import safe_multiplier, safe_dividend
-  
+from SAXSsimulations.utils import safe_multiplier, safe_dividend, solve_quadratic_eq_positive
+
   
 class Cylinder(Simulation):
     """
@@ -22,7 +22,7 @@ class Cylinder(Simulation):
         self.phi = None
         self.center = None  
         self.shape = 'cylinder'
-        self.rotWidth = 3 # VARIATION IS 3 DEGREES
+        self.rotWidth = 5 # VARIATION IS 5 DEGREES
         self.shapes=0
 
     def place_shape(self, single = False, **kwargs):
@@ -52,10 +52,8 @@ class Cylinder(Simulation):
         input:
             single[boolean] : create a single sphere in a box?        
         """
-        if self.phi is None:
-            self.phi = int(np.random.uniform(low = 0, high = 360))
         if self.theta is None:
-            self.theta = 3
+            self.theta = int(np.random.uniform(low = 0, high = 10))
             self.theta_distribution = 'gaussian'
             self.phi_distribution = 'uniform'
 
@@ -70,9 +68,8 @@ class Cylinder(Simulation):
             while self.hMean<=0:
                 self.hMean = np.random.normal(loc = self.box_size*0.4, scale= self.box_size*0.1 )
         attempt = 0
-        self.theta_all = []
-        self.phi_all = []
         if single:
+            phi = int(np.random.uniform(low = 0, high = 90))
             success = False
             while success == False and attempt <100:
                 attempt+=1
@@ -80,42 +77,86 @@ class Cylinder(Simulation):
                     continue # center was passed and is inside box
                 else:
                     self.center = np.random.uniform(low = -self.box_size/2 + self.rMean, high = self.box_size/2 - self.rMean, size = 3)
-                self.__generate_cylinder(self.rMean, self.hMean, self.center, self.theta, self.phi)
-                success = self.pbc                    
+                self.__generate_cylinder(self.rMean, self.hMean, self.center, self.theta, phi)
+                success = self._pbc                    
                 if success ==False:
                     self.center = None
                 
             self.shapes=1
             print('volume fraction is {vf:.5f}, height is {h:.2f}, radius is {r:.2f}, center at ({cx:.1f},{cy:.1f},{cz:.1f}), rotation phi is {phi}, rotation theta is {theta} '
-                .format(vf = self.volume_fraction, h = self.hMean, r = self.rMean, cx=self.center[0], cy = self.center[1], cz = self.center[2], phi = self.phi, theta = self.theta))
+                .format(vf = self.volume_fraction, h = self.hMean, r = self.rMean, cx=self.center[0], cy = self.center[1], cz = self.center[2], phi = phi, theta = self.theta))
         else:
+            self.theta_all = []
+            self.phi_all = []
             while self.volume_fraction<self.volume_fraction_threshold and attempt <100:
                 success = False
                 while success == False:
                     height = np.random.normal(loc = self.hMean, scale= self.hWidth)
                     radius = np.random.normal(loc = self.rMean, scale= self.rWidth )
                     center = np.random.uniform(low = -self.box_size/2, high = self.box_size/2, size = 3)
-                    if self.theta_distribution == 'gaussian':
-                        theta = int(np.random.normal(loc = self.theta, scale= self.rotWidth ) )
-                        phi = int(np.random.uniform(low = 0, high = 45))
-                        self.phi_all.append(phi)
-                    elif self.phi_distribution == 'gaussian':
-                        theta = int(np.random.uniform(low = 0, high = 45))
-                        phi = int(np.random.normal(loc = self.phi, scale= self.rotWidth ))
-                        self.theta_all.append(theta)
+                    theta = int(np.random.normal(loc = self.theta, scale= self.rotWidth ) )
+                    phi = int(np.random.uniform(low = 0, high = 360))
+                    self.phi_all.append(phi)
+                    self.theta_all.append(theta)
 
                     if ((center >self.box_size/2)|(center<-self.box_size/2) == True).any() or (radius <0) or (height <0):
                         continue # center is outside of box or radius or height is negatibve
                     self.__generate_cylinder(radius, height, center, theta, phi)
-                    success = self.pbc                    
+                    success = self._pbc                    
 
-                    
                     if success:
                         self.shapes+=1
                         print('volume fraction is {vf:.5f}, height is {h:.3f}, radius is {r:.3f}, center at ({cx:.1f},{cy:.1f},{cz:.1f}), rotation phi is {phi}, rotation theta is {theta} '
                         .format(vf = self.volume_fraction, h = height, r = radius, cx=center[0], cy = center[1], cz = center[2], phi = phi, theta = theta))
                     attempt+=1
 
+
+    def __points_in_cylinder(self, pt1, pt2, r, q):
+        vec = pt2 - pt1
+        const = r * np.linalg.norm(vec)
+        return np.array((np.dot(q - pt1, vec) >= 0) * (np.dot(q - pt2, vec) <= 0) *(np.linalg.norm(np.cross(q - pt1, vec), axis=1) <= const), dtype=float)
+
+    def __cylinder_pbc(self,mask):
+        self._pbc =  not((mask[0,:,:] == True).any() or (mask[-1,:,:] == True).any() or (mask[:,0,:] == True).any() or (mask[:, -1,:] == True).any() or (mask[:,:,0] == True).any() or (mask[:,:,-1] == True).any())
+            
+
+    def __generate_cylinder(self, radius, height, center, theta, phi):
+        
+        coords = np.array(np.meshgrid(self.grid, self.grid, self.grid))
+        coordsArr = np.vstack(coords).reshape(3,-1).T 
+
+        cylinder_end = [center[0]+height*np.sin(np.deg2rad(theta))* np.cos(np.deg2rad(phi)) , 
+                center[1]+height*np.sin(np.deg2rad(theta))* np.sin(np.deg2rad(phi)), 
+                center[2]+np.cos(np.deg2rad(theta))*height]
+        cylinder = self.__points_in_cylinder(pt1 = center, pt2 = cylinder_end, r=radius, q=coordsArr)
+        cylinder = np.array(cylinder).reshape(self.nPoints, self.nPoints, self.nPoints)
+        self.__cylinder_pbc(cylinder)
+        if  self._pbc:
+            self._box = np.logical_or(self._box, torch.from_numpy(cylinder).to(torch.bool))
+
+  
+    def save_data(self, uncertainty = "ISigma", directory='.', for_SasView = True):
+        """
+        Saves .dat file. If slice  of 3D Fourier Transform was created only, operates on that slice, otherwise on whole data.
+        input:
+            directory to save
+            for_SasView: boolean, if True converts Q and I to SASView compartible values: Armstrong^-1 for Q and (m*sr)^-1.
+        """
+        Q = self.Q[self.nPoints//2+1,:,:].numpy()
+        data = pd.DataFrame({'Qx': self.binned_slice['qy'], 
+                             'Qy': self.binned_slice['qz'],
+                             'I': self.binned_slice['I'], 
+                             'ISigma': self.binned_slice[uncertainty]})
+        if for_SasView:
+            data.assign(Qx = data.Qx/10, Qy = data.Qy/10, I = data.I/100, ISigma = data.ISigma/100).to_csv(directory+'/polydispersed_cylinders_{r}_{h}.dat'.
+            format(r = int(self.rMean*1000), h = int(self.hMean*1000)), header=None, index=None, columns=["Qx", "Qy", "I", uncertainty])
+        else:
+            data.to_csv(directory+'/polydispersed_cylinders_{r}_{h}.dat'.
+            format(r = int(self.rMean*1000), h = int(self.hMean*1000)), header=None, index=None, columns=["Qx", "Qy", "I", uncertainty])
+
+    
+
+'''
 
             
     def __create_slice(self, height, r_theta,r_phi, center, theta, phi, d, cap_start,cap_small, direction_right, check):
@@ -125,7 +166,7 @@ class Cylinder(Simulation):
             height : the height of the cylinder
             r_theta: ellipse semi-axis in the direction of z-axis
             r_phi : ellipse semi-axis in the direction of y-axis
-            center : center of the current ellipse
+            center : center of the cylinder
             theta: rotation angle of current cylinder in the direction of z-axis
             phi: rotation angle of current cylinder in the direction of y-axis
             d : distance from the center of the cylinder to the curretn slice along the x-axis
@@ -135,12 +176,21 @@ class Cylinder(Simulation):
             check: is the check that th cylinder fits the box needed? only done for the last two slices. They are not allowed to
             "touch" borders of the simulation box or not be present in a box at all.
         """
-        if direction_right:
-            center_y = center[1] + safe_dividend(d,np.tan(np.deg2rad(phi))) if phi !=0 else center[1] # because of the theta rotation the y-coordinate of center at fixed x  slice shifts
-            center_z = center[2] + safe_dividend(d,np.tan(np.deg2rad(theta))) if theta !=0 else center[2] # because of phi rotation the z-coordinate of center at fixed x shifts
+        a = 4*np.sin(np.deg2rad(phi))**2*np.sin(np.deg2rad(theta))**2 - 4*np.sin(np.deg2rad(phi))**4 - np.sin(np.deg2rad(theta))**4
+        b = 8*d**2*np.sin(np.deg2rad(phi))**2*np.sin(np.deg2rad(theta))**2 - 8*d*2*np.sin(np.deg2rad(phi))**4 - d**2*np.sin(np.deg2rad(theta))**4
+        c = -4*d**4*np.sin(np.deg2rad(phi))**2*(np.sin(np.deg2rad(phi))**2 - np.sin(np.deg2rad(theta))**2)
+        shift_in_y_squared = [np.sqrt(i) for i in solve_quadratic_eq_positive(a,b,c)] # sqrt returns non-neq as we want it conditioned
+        if len(shift_in_y_squared)>1:
+            print('all solutions',shift_in_y_squared)
         else:
-            center_y = center[1] - safe_dividend(d,np.tan(np.deg2rad(phi))) if phi !=0 else center[1]
-            center_z = center[2] - safe_dividend(d,np.tan(np.deg2rad(theta))) if theta !=0 else center[2] 
+            y_shift = shift_in_y_squared[0]
+            z_shift = np.sqrt(y_shift**2 + (np.sqrt(d**2+y_shift**2)-d)**2) * np.cos(np.deg2rad(theta)) / (2*np.sin(np.deg2rad(phi)))
+        if direction_right:
+            center_y = center[1] + y_shift if phi !=0 else center[1] # because of the theta rotation the y-coordinate of center at fixed x  slice shifts
+            center_z = center[2] + z_shift if theta !=0 else center[2] # because of phi rotation the z-coordinate of center at fixed x shifts
+        else:
+            center_y = center[1] - y_shift if phi !=0 else center[1]
+            center_z = center[2] - z_shift if theta !=0 else center[2] 
         x2y = self.grid[None,:]
         x2z = self.grid[:,None]
         mask = ((x2y-center_y)**2/r_phi**2 + (x2z-center_z)**2/r_theta**2 <=1).type(torch.bool)
@@ -148,40 +198,30 @@ class Cylinder(Simulation):
             if float(mask.sum()) ==0 or (mask[0,:] == True).any() or (mask[-1,:] == True).any() or (mask[:,0] == True).any() or (mask[:, -1] == True).any():
                 return torch.zeros_like(mask), True # check_failed
         if cap_start:
-            d_cap = (height/2- safe_dividend(d,np.cos(np.deg2rad(theta)),np.cos(np.deg2rad(phi)))) 
-            c_theta =  safe_dividend(d_cap, np.sin(np.deg2rad(theta))) # will be negative for cap_small cases
-            c_phi =  safe_dividend(d_cap, np.sin(np.deg2rad(phi)))
-            #print("r_phi is {r1:.2f} r theta is {r2:.2f}, cap at ({cap_phi:.2f},{cap_theta:.2f})".format(r2 = r_theta, r1 = r_phi,cap_theta = float(cap_theta), cap_phi = float(cap_phi)))
-            cap_theta = 0 if theta == 0 else (float(r_theta + c_theta) )  # AS IN PAGE 2.1
-            cap_phi =  0 if phi == 0 else (float(r_phi + c_phi) )
+            d_cap = safe_dividend((height/2- safe_dividend(d,np.sin(np.deg2rad(theta))),np.cos(np.deg2rad(theta)))) 
+            d_cap = float(r_theta + d_cap)
+            
 
             first_index_y = center_y - r_phi 
             last_index_y = center_y + r_phi 
             first_index_z = center_z - r_theta 
             last_index_z = center_z + r_theta 
             #print('f_y:({f_y:.2f},{c_z:.2f}), l_y:({l_y:.2f},{c_z:.2f}), f_z:({c_y:.2f},{f_z:.2f}), l_z:({c_y:.2f},{l_z:.2f})'.format(f_y = first_index_y, f_z = first_index_z, l_y = last_index_y, l_z  =last_index_z, c_y = center_y, c_z = center_z))
-
-            if theta ==0:
-                cap_mask = (x2y<first_index_y+cap_phi).type(torch.bool) if direction_right else (x2y<last_index_y-cap_phi).type(torch.bool)
-                #print("Ellipse equation: (x-({y:+.2f}))^2/{r_phi:.2f}^2 +(y -({z:+.2f}))^2/{r_theta:.2f}^2<1, line equation: x < {x}".format(r_theta = float(r_theta), r_phi = float(r_phi),  y = float(center_y), z = float(center_z), x = A[0]))
-            elif phi ==0:
+            
+            if phi ==0:
                 if direction_right:
-                    line_right = np.linalg.solve(np.array([[first_index_y, 1],[last_index_y,1]]), np.array([first_index_z+cap_theta,first_index_z+cap_theta]))
+                    line_right = np.linalg.solve(np.array([[first_index_y, 1],[last_index_y,1]]), np.array([first_index_z+d_cap,first_index_z+d_cap]))
                 else:
-                    line_right = np.linalg.solve(np.array([[first_index_y, 1],[last_index_y,1]]), np.array([last_index_z-cap_theta,last_index_z-cap_theta]))
+                    line_right = np.linalg.solve(np.array([[first_index_y, 1],[last_index_y,1]]), np.array([last_index_z-d_cap,last_index_z-d_cap]))
                 cap_mask = (x2y *line_right[0]+line_right[1]>x2z).type(torch.bool)
             else:
                 if  direction_right:
-                    A = (float(first_index_y + cap_phi), center_z)
-                    C = (center_y, float(first_index_z+cap_theta))
-                    #A = (np.sqrt(r_phi**2 * (1 - (float(first_index_z + cap_theta) - center_z)**2/r_theta**2))+center_y,float(first_index_z + cap_theta) )
-                    #C = (float(first_index_y+cap_phi), np.sqrt(r_theta**2*(1 - (float(first_index_y+cap_phi) - center_y)**2/r_phi**2))+center_z)
+                    A = (center_y, float(first_index_z+d_cap))
+                    C = (last_index_y, float(first_index_z+d_cap - (last_index_y- center_y)*np.tan(np.deg2rad(phi))))
                 else:
-                    A = (float(last_index_y - cap_phi), center_z)
-                    C = (center_y, float(last_index_z-cap_theta))
-                    #A = (np.sqrt(r_phi**2 * (1 - (float(last_index_z - cap_theta) - center_z)**2/r_theta**2))+center_y,float(last_index_z - cap_theta) )
-                    #C = (float(last_index_y-cap_phi), np.sqrt(r_theta**2*(1 - (float(last_index_y-cap_phi) - center_y)**2/r_phi**2))+center_z)
-
+                    A = (center_y, float(last_index_z - d_cap))
+                    C = (last_index_y, float(last_index_z  - d_cap - (last_index_y- center_y)*np.tan(np.deg2rad(phi))))
+                    
                 #print('A: ({a0:.2f},{a1:.2f}), C: ({c0:.2f},{c1:.2f})'.format(a0 = A[0], a1  =A[1], c0 = C[0], c1 = C[1])) 
                 line_right = np.linalg.solve(np.array([[A[0], 1],[C[0],1]]), np.array([A[1],C[1]]))
                 cap_mask = (x2y *line_right[0]+line_right[1]>x2z).type(torch.bool)
@@ -203,11 +243,12 @@ class Cylinder(Simulation):
         output:
             boolean: True if a cylinder was  placed in a box, otherwise, if constraints were not met returns False
         """
-        central_axis_cylinder_projection_on_x = safe_multiplier(height/2,np.cos(np.deg2rad(theta)),np.cos(np.deg2rad(phi)))//self.grid_space # projection of central cylinder axis on x-axis
-        cylinder_rest_projection_on_x =  safe_multiplier(np.sin(np.deg2rad(theta)),np.sin(np.deg2rad(phi)),radius)//self.grid_space # projection of the rest of the cylinder after the central axis on x-axis
+        central_axis_cylinder_projection_on_x = safe_multiplier(height/2,np.sin(np.deg2rad(theta))) - 
+                                                safe_multiplier(h, np.sin(np.deg2rad(phi/2)), np.sin(np.deg2rad(phi/2))/ np.sin(np.deg2rad(theta)))//self.grid_space # projection of central cylinder axis on x-axis
+        cylinder_rest_projection_on_x =  safe_multiplier(np.cos(np.deg2rad(theta)),np.sin(np.deg2rad(phi)),radius)//self.grid_space # projection of the rest of the cylinder after the central axis on x-axis
         cylinder_projection_on_x = math.ceil(central_axis_cylinder_projection_on_x+ cylinder_rest_projection_on_x) # projection of whole cylinder on x-axis
         #print(cylinder_projection_on_x, central_axis_cylinder_projection_on_x, cylinder_rest_projection_on_x)
-        radius_at_theta = safe_dividend(radius,np.cos(np.deg2rad(theta))) # calculate the radius of ellipse at slice at both rotations
+        radius_at_theta = safe_dividend(radius,np.sin(np.deg2rad(theta))) # calculate the radius of ellipse at slice at both rotations
         radius_at_phi = safe_dividend(radius,np.cos(np.deg2rad(phi)))
         #print('radius is {r:.2f}, r_phi is {r_phi:.2f} and r_theta is {r_theta:.2f}'.format(r = radius, r_phi = radius_at_phi, r_theta = radius_at_theta))
         # if central slice on grid:
@@ -259,71 +300,6 @@ class Cylinder(Simulation):
                 mask,_ = self.__create_slice(height, radius_at_theta,radius_at_phi, center, theta, phi, d2,  cap_start, cap_small, direction_right = False, check = False)
                 self._box[nearest_bigger_ind-1-i,mask] = 1
         return True
-  
-    def save_data(self, uncertainty = "ISigma", directory='.', for_SasView = True):
-        """
-        Saves .dat file. If slice  of 3D Fourier Transform was created only, operates on that slice, otherwise on whole data.
-        input:
-            directory to save
-            for_SasView: boolean, if True converts Q and I to SASView compartible values: Armstrong^-1 for Q and (m*sr)^-1.
-        """
-        Q = self.Q[self.nPoints//2+1,:,:].numpy()
-        data = pd.DataFrame({'Qx': self.binned_slice['qy'], 
-                             'Qy': self.binned_slice['qz'],
-                             'I': self.binned_slice['I'], 
-                             'ISigma': self.binned_slice[uncertainty]})
-        if for_SasView:
-            data.assign(Qx = data.Qx/10, Qy = data.Qy/10, I = data.I/100, ISigma = data.ISigma/100).to_csv(directory+'/polydispersed_cylinders_{r}_{h}.dat'.
-            format(r = int(self.rMean*1000), h = int(self.hMean*1000)), header=None, index=None, columns=["Qx", "Qy", "I", uncertainty])
-        else:
-            data.to_csv(directory+'/polydispersed_cylinders_{r}_{h}.dat'.
-            format(r = int(self.rMean*1000), h = int(self.hMean*1000)), header=None, index=None, columns=["Qx", "Qy", "I", uncertainty])
-
-    
-
-'''
-
-    def __points_in_cylinder(self, pt1, pt2, r, q):
-        vec = pt2 - pt1
-        const = r * np.linalg.norm(vec)
-        return np.array((np.dot(q - pt1, vec) >= 0) * (np.dot(q - pt2, vec) <= 0) *(np.linalg.norm(np.cross(q - pt1, vec), axis=1) <= const), dtype=float)
-
-    def edge_pbc(self,pt1, pt2, r, edge_current):
-        edge_plane = np.vstack(np.meshgrid(edge_current[0], edge_current[1], edge_current[2])).reshape(3,-1).T
-        edge_density = self.__points_in_cylinder(pt1, pt2, r, edge_plane)
-        if edge_density.sum()>0: #the edge of the box will contain a density of a cylinder: pbc will not hold!
-            self.pbc = False
-
-    def __cylinder_pbc(self, pt1, pt2, r ):
-        self.pbc = True
-        edge = [self.grid,self.grid,self.grid]
-        for d in range(3):
-            edge_current = edge.copy()
-            edge_current[d] = float(self.grid.min())
-            self.edge_pbc(pt1,pt2,r,edge_current)
-            if not self.pbc:
-                break
-            edge_current[d] = float(self.grid.max())
-            self.edge_pbc(pt1,pt2,r,edge_current)
-            if not self.pbc:
-                break
-
-            
-
-    def __generate_cylinder(self, radius, height, center, theta, phi):
-        
-        coords = np.array(np.meshgrid(self.grid, self.grid, self.grid))
-        coordsArr = np.vstack(coords).reshape(3,-1).T
-        pointO = np.array([center[0], center[1],center[2] + height*np.cos(np.deg2rad(theta))])
-        cylinder_end = [center[0]+np.cos(np.deg2rad(phi/2))*2*height*np.sin(np.deg2rad(theta))* np.sin(np.deg2rad(phi/2)) , 
-                        center[1]+np.sin(np.deg2rad(theta))*height-np.sin(np.deg2rad(phi/2))*2*height*np.sin(np.deg2rad(theta))* np.sin(np.deg2rad(phi/2)), 
-                        center[2]+np.cos(np.deg2rad(theta))*height]
-        self.__cylinder_pbc(center, cylinder_end, radius)
-        if  self.pbc:
-            cylinder = self.__points_in_cylinder(pt1 = center, pt2 = np.array(cylinder_end), r=radius, q=coordsArr)
-            cylinder = np.array(cylinder).reshape(self.nPoints, self.nPoints, self.nPoints)
-            self._box = np.logical_or(self._box, torch.from_numpy(cylinder).to(torch.bool))
-
 
         
 '''

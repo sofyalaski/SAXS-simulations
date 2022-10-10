@@ -11,7 +11,7 @@ import config as c
 import losses
 import model
 import monitoring
-
+import numpy as np
 assert c.train_loader and c.test_loader, "No data loaders supplied"
 
 def noise_batch(ndim):
@@ -29,6 +29,9 @@ def loss_max_likelihood(out, y):
 
 def loss_forward_mmd(out, y):
     # Shorten output, and remove gradients wrt y, for latent loss
+
+    print(out[:, :c.ndim_z], out[:, :c.ndim_z].shape)
+    print( out[:, -c.ndim_y:].data, out[:, -c.ndim_y:].data.shape)
     output_block_grad = torch.cat((out[:, :c.ndim_z],
                                    out[:, -c.ndim_y:].data), dim=1)
     y_short = torch.cat((y[:, :c.ndim_z], y[:, -c.ndim_y:]), dim=1)

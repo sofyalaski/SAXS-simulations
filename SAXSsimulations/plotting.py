@@ -93,6 +93,10 @@ def plot_FTI_version(custom_version, torch_version, qx, slice_number = None, pat
     # just another round to compare
     custom_version = custom_version.numpy()
     torch_version = torch_version.numpy()
+
+    vmin = min(myround(np.log(custom_version).min()),myround(np.log(torch_version).min()))
+    vmax = max(myround(np.log(custom_version).max()), myround(np.log(torch_version).max()))
+
     difference = compute_error(custom_version,torch_version)
     print('the maximal difference between the implementation of the FTI is {}'.format(difference.max()))
     if not slice_number:
@@ -100,10 +104,16 @@ def plot_FTI_version(custom_version, torch_version, qx, slice_number = None, pat
     
     fig,axs = plt.subplots(1,2,figsize = (20,10))
     ax = axs[0]
-    im = ax.imshow(np.log(custom_version[slice_number,:,:]), cmap = 'Greys',  extent = [qx.min(), qx.max(), qx.min(), qx.max()])
+    if custom_version.ndim==3:
+        im = ax.imshow(np.log(custom_version[slice_number,:,:]), cmap = 'Greys',  extent = [qx.min(), qx.max(), qx.min(), qx.max()], vmin = vmin, vmax = vmax)
+    else:
+        im = ax.imshow(np.log(custom_version), cmap = 'Greys',  extent = [qx.min(), qx.max(), qx.min(), qx.max()], vmin = vmin, vmax = vmax)
     ax.set_title('custom fft ')
     ax = axs[1]
-    im = ax.imshow(np.log(torch_version[slice_number,:,:]), cmap = 'Greys',  extent = [qx.min(), qx.max(), qx.min(), qx.max()])
+    if torch_version.ndim ==3:
+        im = ax.imshow(np.log(torch_version[slice_number,:,:]), cmap = 'Greys',  extent = [qx.min(), qx.max(), qx.min(), qx.max()], vmin = vmin, vmax = vmax)
+    else:
+        im = ax.imshow(np.log(torch_version), cmap = 'Greys',  extent = [qx.min(), qx.max(), qx.min(), qx.max()], vmin = vmin, vmax = vmax)
     ax.set_title('fftn')
     plt.colorbar(im, ax = axs.ravel().tolist(), shrink=0.8, location = 'left')
     if path:
@@ -182,11 +192,17 @@ def plt_slices_sum(simulation):
     """
     fig,axs = plt.subplots(1,3,figsize = (15,5))
     ax = axs[0]
-    im = ax.imshow(simulation.density.sum(axis=0).T)
+    im = ax.imshow(simulation.density.sum(axis=0).T) # when sum on axis = x, the figure will be [y,z],  but i want z to be on y axis of the plot
+    ax.set_xlabel('y')
+    ax.set_ylabel('z')
     ax = axs[1]
-    im = ax.imshow(simulation.density.sum(axis=1).T)
+    im = ax.imshow(simulation.density.sum(axis=1).T) # same here z on the y-axis, x on the x axis
+    ax.set_xlabel('x')
+    ax.set_ylabel('z')
     ax = axs[2]
-    im = ax.imshow(simulation.density.sum(axis=2))
+    im = ax.imshow(simulation.density.sum(axis=2).T)
+    ax.set_xlabel('x')
+    ax.set_ylabel('y')
     plt.show()    
 
 def plot_slices_at_interval(interval,i,simulation, direction):
@@ -209,24 +225,29 @@ def plot_slices_at_interval(interval,i,simulation, direction):
             ax.imshow(simulation.density[:,:,i +t*interval ])
     
 
-def plt_slices_ft(simulation, vmin, vmax):
+def plt_slices_ft(simulation):
     """
     Plots central slices of the Fourier transform given all dimensions x/y/z.
     input:
         simulation : class instance with calculated attributes
-        vmin : specify the logged min of the values
-        vmax: specify the logged max of the values
     """
+    vmin = myround(np.log(simulation._FTI_custom).min())
+    vmax = myround(np.log(simulation._FTI_custom).max())
+
     fig,axs = plt.subplots(1,3,figsize = (15,5))
     ax = axs[0]
-    im = ax.imshow(np.log(simulation._FTI_custom[simulation._FTI_custom.shape[0]//2+1,:,:]), cmap = 'Greys', vmin = vmin, vmax = vmax)
+    im = ax.imshow(np.log(simulation._FTI_custom[simulation._FTI_custom.shape[0]//2+1,:,:]), cmap = 'Greys', vmin = vmin, vmax = vmax, extent = [simulation.qx.min(), simulation.qx.max(), simulation.qx.min(), simulation.qx.max()])
     ax = axs[1]
-    im = ax.imshow(np.log(simulation._FTI_custom[:,simulation._FTI_custom.shape[1]//2+1,:]), cmap = 'Greys', vmin = vmin, vmax = vmax)
+    im = ax.imshow(np.log(simulation._FTI_custom[:,simulation._FTI_custom.shape[1]//2+1,:]), cmap = 'Greys', vmin = vmin, vmax = vmax, extent = [simulation.qx.min(), simulation.qx.max(), simulation.qx.min(), simulation.qx.max()])
     ax = axs[2]
-    im = ax.imshow(np.log(simulation._FTI_custom[:,:,simulation._FTI_custom.shape[2]//2+1]), cmap = 'Greys', vmin = vmin, vmax = vmax)
+    im = ax.imshow(np.log(simulation._FTI_custom[:,:,simulation._FTI_custom.shape[2]//2+1]), cmap = 'Greys', vmin = vmin, vmax = vmax, extent = [simulation.qx.min(), simulation.qx.max(), simulation.qx.min(), simulation.qx.max()])
     plt.show()    
 
 def plot_2d_sas(Intensity_2D_sas):
     """ plot 2D SasModels simulation"""
     plt.imshow(np.log10(Intensity_2D_sas))
     plt.colorbar()
+
+def myround(x, base=5):
+    d = (x/base)
+    return base * np.ceil(d) if d >0 else base * np.floor(d) 

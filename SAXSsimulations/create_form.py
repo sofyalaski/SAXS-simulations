@@ -469,12 +469,12 @@ class Simulation(DensityData):
                 'length_pd_type': 'gaussian', 
                 'length_pd_n': 35,          
                 'theta':self.theta,    
-                'theta_pd': self.rotWidth if not self.theta_all else np.abs(self.rotWidth/np.mean(self.theta_all)) ,
-                'theta_pd_type':self.theta_distribution,
+                'theta_pd': 5 ,
+                'theta_pd_type':'gaussian',
                 'theta_pd_n':10,
-                'phi':90+self.phi,
-                'phi_pd': self.rotWidth if not self.phi_all else np.abs(self.rotWidth/np.mean(self.phi_all)),
-                'phi_pd_type':self.phi_distribution,
+                'phi':0,
+                'phi_pd': 360,
+                'phi_pd_type':'uniform',
                 'phi_pd_n':10
                 })
         self.__create_sas_model()

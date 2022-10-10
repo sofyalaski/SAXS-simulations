@@ -2,28 +2,32 @@ import torch
 import torch.nn as nn
 import torch.optim
 from torch.autograd import Variable
+import FrEIA.framework as Ff
+import FrEIA.modules as Fm
 
-from FrEIA.framework import *
-from FrEIA.modules import *
 
 import config as c
 
-nodes = [InputNode(c.ndim_x + c.ndim_pad_x, name='input')]
+def fc_constr(dims_in, dims_out):
+    return nn.Sequential(nn.Linear(dims_in, 128), nn.ReLU(),
+                        nn.Linear(128,  128), nn.ReLU(),
+                        nn.Linear(128,  dims_out))
+
+nodes = [Ff.InputNode(c.ndim_x + c.ndim_pad_x, name='input')]
 
 for i in range(c.N_blocks):
-    nodes.append(Node([nodes[-1].out0],rev_multiplicative_layer, 
-                      {'F_class':F_fully_connected, 
-                       'F_args':{'internal_size':c.hidden_layer_sizes},
+    nodes.append(Ff.Node([nodes[-1].out0],Fm.RNVPCouplingBlock, 
+                      {'subnet_constructor':fc_constr,
                        'clamp':c.exponent_clamping,
                       },
                       name='coupling_{}'.format(i)))
 
     if c.use_permutation:
-        nodes.append(Node([nodes[-1].out0], permute_layer, {'seed':i}, name='permute_{}'.format(i)))
+        nodes.append(Ff.Node([nodes[-1].out0], Fm.PermuteRandom, {'seed':i}, name='permute_{}'.format(i)))
 
-nodes.append(OutputNode([nodes[-1].out0], name='output'))
+nodes.append(Ff.OutputNode([nodes[-1].out0], name='output'))
 
-model = ReversibleGraphNet(nodes, verbose=c.verbose_construction)
+model = Ff.ReversibleGraphNet(nodes, verbose=c.verbose_construction)
 model.to(c.device)
 
 params_trainable = list(filter(lambda p: p.requires_grad, model.parameters()))

@@ -11,7 +11,7 @@ filename_in     = ''
 # Compute device to perform the training on, 'cuda' or 'cpu'
 device          = 'cuda'
 # Use interactive visualization of losses and other plots. Requires visdom
-interactive_visualization = True
+interactive_visualization = False # check first how this visdom works
 # Run a list of python functions at test time after eacch epoch
 # See toy_modes_train.py for reference example
 test_time_functions = []
@@ -74,7 +74,7 @@ lambd_max_likelihood = 1.
 
 # Both for fitting, and for the reconstruction, perturb y with Gaussian 
 # noise of this sigma
-add_y_noise     = 5e-2
+add_y_noise     = 0 # because I do not need Gaussian noize on the scattering patterns
 # For reconstruction, perturb z 
 add_z_noise     = 2e-2
 # In all cases, perturb the zero padding
