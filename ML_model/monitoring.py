@@ -26,8 +26,8 @@ class Visualizer:
             self.header = 'Epoch '
             for l in loss_labels:
                 self.header += ' %15s' % (l)
-
-    def update_losses(self, losses):
+                    
+    def update_losses(self, losses, logscale=False):
         if self.header:
             print(self.header)
             self.header = None
@@ -35,8 +35,10 @@ class Visualizer:
         print('\r', '    '*20, end='')
         line = '\r%6.3i' % (self.counter)
         for l in losses:
-            line += '  %14.4f' % (l)
-
+            if logscale: 
+                line += '  %14.4f' % (np.log10(l))
+            else:
+                line += '  %14.4f' % (l)
         print(line)
         self.counter += 1
 
@@ -133,7 +135,10 @@ def show_hist(data):
     visualizer.update_hist(data.data.cpu())
 
 def show_cov(data):
-    visualizer.update_cov(data.data.cpu())
+    if c.interactive_visualization:
+        visualizer.update_cov(data.data.cpu())
+    else:
+        pass
 
 def close():
     visualizer.close()

@@ -29,11 +29,9 @@ def loss_max_likelihood(out, y):
 
 def loss_forward_mmd(out, y):
     # Shorten output, and remove gradients wrt y, for latent loss
-
-    print(out[:, :c.ndim_z], out[:, :c.ndim_z].shape)
-    print( out[:, -c.ndim_y:].data, out[:, -c.ndim_y:].data.shape)
+    # [z,y] only
     output_block_grad = torch.cat((out[:, :c.ndim_z],
-                                   out[:, -c.ndim_y:].data), dim=1)
+                                   out[:, -c.ndim_y:].data), dim=1) 
     y_short = torch.cat((y[:, :c.ndim_z], y[:, -c.ndim_y:]), dim=1)
 
     l_forw_fit = c.lambd_fit_forw * losses.l2_fit(out[:, c.ndim_z:], y[:, c.ndim_z:])
@@ -42,19 +40,19 @@ def loss_forward_mmd(out, y):
     return l_forw_fit, l_forw_mmd
 
 def loss_backward_mmd(x, y):
-    x_samples = model.model(y, rev=True) 
+    x_samples, x_samples_jac = model.model(y, rev=True) 
     MMD = losses.backward_mmd(x, x_samples)
     if c.mmd_back_weighted:
         MMD *= torch.exp(- 0.5 / c.y_uncertainty_sigma**2 * losses.l2_dist_matrix(y, y))
     return c.lambd_mmd_back * torch.mean(MMD)
 
-def loss_reconstruction(out_y, y, x):
-    cat_inputs = [out_y[:, :c.ndim_z] + c.add_z_noise * noise_batch(c.ndim_z)]
+def loss_reconstruction(out_y, x):
+    cat_inputs = [out_y[:, :c.ndim_z] + c.add_z_noise * noise_batch(c.ndim_z)] # list with 1 tensor
+    
     if c.ndim_pad_zy:
-        cat_inputs.append(out_y[:, c.ndim_z:-c.ndim_y] + c.add_pad_noise * noise_batch(c.ndim_pad_zy))
-    cat_inputs.append(out_y[:, -c.ndim_y:] + c.add_y_noise * noise_batch(c.ndim_y))
-
-    x_reconstructed = model.model(torch.cat(cat_inputs, 1), rev=True)
+        cat_inputs.append(out_y[:, c.ndim_z:-c.ndim_y] + c.add_pad_noise * noise_batch(c.ndim_pad_zy)) # list with 2 tensor
+    cat_inputs.append(out_y[:, -c.ndim_y:] + c.add_y_noise * noise_batch(c.ndim_y)) # list with 3 tensors
+    x_reconstructed, x_reconstructed_jac = model.model(torch.cat(cat_inputs, 1), rev=True) # concatenate list elements along axis 1
     return c.lambd_reconstruct * losses.l2_fit(x_reconstructed, x)
 
 def train_epoch(i_epoch, test=False):
@@ -82,19 +80,22 @@ def train_epoch(i_epoch, test=False):
 
         batch_idx += 1
 
-        x, y = Variable(x).to(c.device), Variable(y).to(c.device)
+        #x, y = Variable(x).to(c.device), Variable(y).to(c.device)
+        x, y = x.to(c.device), y.to(c.device)
 
         if c.add_y_noise > 0:
             y += c.add_y_noise * noise_batch(c.ndim_y)
 
         if c.ndim_pad_x:
+            # x = [x, pad_x]
             x = torch.cat((x, c.add_pad_noise * noise_batch(c.ndim_pad_x)), dim=1)
         if c.ndim_pad_zy:
             y = torch.cat((c.add_pad_noise * noise_batch(c.ndim_pad_zy), y), dim=1)
+        # y = [z, pad_yz, y]
         y = torch.cat((noise_batch(c.ndim_z), y), dim=1)
 
-        out_y = model.model(x)
-
+        out_y, out_y_jac = model.model(x)
+        # tuple with output[0] and jacobian[1]
         if c.train_max_likelihood:
             batch_losses.append(loss_max_likelihood(out_y, y))
 
@@ -105,10 +106,10 @@ def train_epoch(i_epoch, test=False):
             batch_losses.append(loss_backward_mmd(x, y))
 
         if c.train_reconstruction:
-            batch_losses.append(loss_reconstruction(out_y.data, y, x))
+            batch_losses.append(loss_reconstruction(out_y.data, x))
 
         l_total = sum(batch_losses)
-        loss_history.append([l.item() for l in batch_losses])
+        loss_history.append([l.item() for l in batch_losses]) # lisr of lists: list for each batch
 
         if not test:
             l_total.backward()
@@ -119,12 +120,11 @@ def train_epoch(i_epoch, test=False):
         monitoring.show_cov(out_y[:, :c.ndim_z])
 
         if c.test_time_functions:
-            out_x = model.model(y, rev=True) 
+            out_x, out_x_jac = model.model(y, rev=True) 
             for f in c.test_time_functions:
                 f(out_x, out_y, x, y)
 
         nograd.__exit__(None, None, None)
-
     return np.mean(loss_history, axis=0)
 
 def main():
@@ -139,10 +139,10 @@ def main():
                 for param_group in model.optim.param_groups:
                     param_group['lr'] = c.lr_init * 1e-1
 
-            train_losses = train_epoch(i_epoch)
+            train_losses = train_epoch(i_epoch) # mean over batches
             test_losses  = train_epoch(i_epoch, test=True)
-
-            monitoring.show_loss(np.concatenate([train_losses, test_losses]))
+            t = np.concatenate([train_losses, test_losses])
+            monitoring.show_loss(t)
             model.scheduler_step() 
 
     except:

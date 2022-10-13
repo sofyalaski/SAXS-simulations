@@ -8,7 +8,7 @@ import FrEIA.modules as Fm
 
 import config as c
 
-def fc_constr(dims_in, dims_out):
+def subnet(dims_in, dims_out):
     return nn.Sequential(nn.Linear(dims_in, 128), nn.ReLU(),
                         nn.Linear(128,  128), nn.ReLU(),
                         nn.Linear(128,  dims_out))
@@ -17,17 +17,17 @@ nodes = [Ff.InputNode(c.ndim_x + c.ndim_pad_x, name='input')]
 
 for i in range(c.N_blocks):
     nodes.append(Ff.Node([nodes[-1].out0],Fm.RNVPCouplingBlock, 
-                      {'subnet_constructor':fc_constr,
+                      {'subnet_constructor':subnet,
                        'clamp':c.exponent_clamping,
                       },
                       name='coupling_{}'.format(i)))
-
+    #print(nodes)
     if c.use_permutation:
         nodes.append(Ff.Node([nodes[-1].out0], Fm.PermuteRandom, {'seed':i}, name='permute_{}'.format(i)))
 
 nodes.append(Ff.OutputNode([nodes[-1].out0], name='output'))
 
-model = Ff.ReversibleGraphNet(nodes, verbose=c.verbose_construction)
+model = Ff.GraphINN(nodes, verbose=c.verbose_construction)
 model.to(c.device)
 
 params_trainable = list(filter(lambda p: p.requires_grad, model.parameters()))

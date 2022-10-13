@@ -25,7 +25,7 @@ lr_init         = 1.0e-3
 #Batch size
 batch_size      = 500
 # Total number of epochs to train for
-n_epochs        = 20
+n_epochs        = 50
 # End the epoch after this many iterations (or when the train loader is exhausted)
 n_its_per_epoch = 200
 # For the first n epochs, train with a much lower learning rate. This can be
