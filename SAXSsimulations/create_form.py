@@ -50,30 +50,55 @@ class DensityData:
             device: to use the GPU
             slice: if None, the central slice will be assigned to the attribute FTI_slice_torch
         """
-        density = self.density.to(device)
-        FT = torch.fft.fftn(density, norm = 'forward')
-        FT = torch.fft.fftshift(FT)
-        FTI = torch.abs(FT)**2
-        self.FTI_torch = FTI.cpu().detach()
+        try:
+            density = self.density.to(device)
+            FT = torch.fft.fftn(density, norm = 'forward')
+            FT = torch.fft.fftshift(FT)
+            FTI = torch.abs(FT)**2
+            self.FTI_torch = FTI.cpu().detach()
+            if slice is None:
+                slice = self.nPoints//2+1
+            self.FTI_slice_torch = self.FTI_torch[slice,:,:]
+        except RuntimeError:
+            print("The simulation is too big to fit into GPU memory. The custom fft method will be used ")
+
+    def calculate_custom_per_axis(self, device = 'cuda',slice = None):
         if slice is None:
             slice = self.nPoints//2+1
-        self.FTI_slice_torch = self.FTI_torch[slice,:,:]
-    
+        FT = self.density.type(torch.complex128)
+        for i in range(FT.shape[1]):
+            for j in range(FT.shape[2]):    
+                if FT[:,i,j].any():
+                    FT_1D = FT[:,i,j].to(device)
+                    FT_1D = torch.fft.fft(FT_1D, norm = 'forward')
+                    FT[:,i,j] = FT_1D.cpu()
+                    del FT_1D
+                    
+        FT = torch.fft.fftshift(FT) # shifts in 1 direction 
+        FT_slice = torch.fft.fft2(FT[slice,:,:].to(device), norm = 'forward') # ft2 at slice
+        FT_slice = torch.fft.fftshift(FT_slice) # shift the slice
+        FTI = torch.abs(FT_slice)**2
+        self.FTI_slice_custom_per_axis = FTI.cpu().detach()
+
     def calculate_custom_FTI_3D(self, device = 'cuda'):
         """
         calculate the 3D FFT via 2D FFT and then the last 1D FFT
         """
-        FT = self.density.type(torch.complex128).to(device)
-        for k in range(FT.shape[0]):
-            if FT[k,:,:].any():
-                FT[k,:,:] = torch.fft.fft2(FT[k,:,:], norm = 'forward')
-        for i in range(FT.shape[1]):
-            for j in range(FT.shape[2]):                
-                FT[:,i,j] = torch.fft.fft(FT[:,i,j], norm = 'forward')
+        try:
+            FT = self.density.type(torch.complex128).to(device)
+            for k in range(FT.shape[0]):
+                if FT[k,:,:].any():
+                    FT[k,:,:] = torch.fft.fft2(FT[k,:,:], norm = 'forward')
+            for i in range(FT.shape[1]):
+                for j in range(FT.shape[2]):                
+                    FT[:,i,j] = torch.fft.fft(FT[:,i,j], norm = 'forward')
 
-        FT = torch.fft.fftshift(FT)
-        FTI = torch.abs(FT)**2
-        self._FTI_custom = FTI.cpu().detach()
+            FT = torch.fft.fftshift(FT)
+            FTI = torch.abs(FT)**2
+            self._FTI_custom = FTI.cpu().detach()
+        except RuntimeError:
+            print('vla')
+
 
     def calculate_custom_FTI_3D_slice(self, device = 'cuda', slice = None):
         """
@@ -469,9 +494,9 @@ class Simulation(DensityData):
                 'length_pd_type': 'gaussian', 
                 'length_pd_n': 35,          
                 'theta':self.theta,    
-                'theta_pd': 5 ,
+                'theta_pd': self.rotWidth ,
                 'theta_pd_type':'gaussian',
-                'theta_pd_n':10,
+                'theta_pd_n':35,
                 'phi':0,
                 'phi_pd': 360,
                 'phi_pd_type':'uniform',

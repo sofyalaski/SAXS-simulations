@@ -53,20 +53,20 @@ class Cylinder(Simulation):
             single[boolean] : create a single sphere in a box?        
         """
         if self.theta is None:
-            self.theta = int(np.random.uniform(low = 0, high = 10))
+            self.theta = np.random.choice([0,90,180,270,360])
             self.theta_distribution = 'gaussian'
             self.phi_distribution = 'uniform'
 
         if self.rMean is None:
             self.rMean = -1
             while self.rMean<=0:
-                self.rMean = np.random.normal(loc = self.box_size*0.02, scale= self.box_size*0.05 )
+                self.rMean = np.random.normal(loc = self.box_size*0.005, scale= self.box_size*0.02 )
                 print('rMean',self.rMean)
 
         if self.hMean is None:
             self.hMean = -1
             while self.hMean<=0:
-                self.hMean = np.random.normal(loc = self.box_size*0.4, scale= self.box_size*0.1 )
+                self.hMean = np.random.normal(loc = self.box_size*0.1, scale= self.box_size*0.1 )
         attempt = 0
         if single:
             phi = int(np.random.uniform(low = 0, high = 90))

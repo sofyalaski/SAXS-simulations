@@ -41,7 +41,7 @@ class Sphere(Simulation):
         if self.rMean is None:
             self.rMean = -1
             while self.rMean<=0:
-                self.rMean = np.random.normal(loc = self.box_size*0.001, scale= self.box_size*0.01 )
+                self.rMean = np.random.normal(loc = self.box_size*0.005, scale= self.box_size*0.02 )
         
         if single:
             if self.center is None:
