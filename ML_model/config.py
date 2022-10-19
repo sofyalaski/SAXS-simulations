@@ -21,7 +21,7 @@ test_time_functions = []
 #######################
 
 # Initial learning rate
-lr_init         = 1.0e-3
+lr_init         = 1.0e-5
 #Batch size
 batch_size      = 500
 # Total number of epochs to train for
@@ -41,8 +41,8 @@ adam_betas = (0.9, 0.95)
 #####################
 #  Data dimensions  #
 #####################
-ndim_x     = 8
-ndim_pad_x = 542
+ndim_x     = 10
+ndim_pad_x = 540
 
 ndim_y     = 512
 ndim_z     = 2
@@ -63,7 +63,7 @@ assert (ndim_x + ndim_pad_x
 
 train_forward_mmd    = True
 train_backward_mmd   = True
-train_reconstruction = True
+train_reconstruction = False
 train_max_likelihood = False
 
 lambd_fit_forw       = 1.
@@ -74,7 +74,7 @@ lambd_max_likelihood = 1.
 
 # Both for fitting, and for the reconstruction, perturb y with Gaussian 
 # noise of this sigma
-add_y_noise     = 0 # because I do not need Gaussian noize on the scattering patterns
+add_y_noise     = 5e-2 # think of smth smart here
 # For reconstruction, perturb z 
 add_z_noise     = 2e-2
 # In all cases, perturb the zero padding

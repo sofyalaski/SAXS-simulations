@@ -9,8 +9,8 @@ import FrEIA.modules as Fm
 import config as c
 
 def subnet(dims_in, dims_out):
-    return nn.Sequential(nn.Linear(dims_in, 128), nn.ReLU(),
-                        nn.Linear(128,  128), nn.ReLU(),
+    return nn.Sequential(nn.Linear(dims_in, 256), nn.ReLU(),
+                        nn.Linear(256,  128), nn.ReLU(),
                         nn.Linear(128,  dims_out))
 
 nodes = [Ff.InputNode(c.ndim_x + c.ndim_pad_x, name='input')]

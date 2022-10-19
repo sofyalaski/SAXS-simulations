@@ -14,6 +14,7 @@ class Sphere(Simulation):
         self.shape = 'sphere'
         super(Sphere, self).__init__(size, nPoints, volFrac)
         self.shapes = 0
+        self.declined_shapes=0
 
     def place_shape(self, single = False, nonoverlapping = False, **kwargs):
         """
@@ -48,8 +49,7 @@ class Sphere(Simulation):
                 self.center = np.random.uniform(low = -self.box_size/2 + self.rMean, high = self.box_size/2 - self.rMean, size = 3)
             _ = self.__generate_sphere(self.rMean, self.center)
             self.shapes=1
-            print('volume fraction is {vf:.5f}, radius is {r:.2f}, center at ({cx:.1f},{cy:.1f},{cz:.1f}) '
-                    .format(vf = self.volume_fraction, r = self.rMean, cx=self.center[0], cy = self.center[1], cz = self.center[2]))
+            print('volume fraction is {vf:.5f}, radius is {r:.2f}, center at ({cx:.1f},{cy:.1f},{cz:.1f}) '.format(vf = self.volume_fraction, r = self.rMean, cx=self.center[0], cy = self.center[1], cz = self.center[2]))
         else:
             while self.volume_fraction<self.volume_fraction_threshold:
                 radius = -1
@@ -60,9 +60,12 @@ class Sphere(Simulation):
                 success = self.__generate_sphere(radius, center, nonoverlapping)
                 if success:
                     self.shapes+=1
-                    print('volume fraction is {vf:.5f}, radius is {r:.2f}, center at ({cx:.1f},{cy:.1f},{cz:.1f}) '
-                            .format(vf = self.volume_fraction, r = radius, cx=center[0], cy = center[1], cz = center[2]))
+                    #print('volume fraction is {vf:.5f}, radius is {r:.2f}, center at ({cx:.1f},{cy:.1f},{cz:.1f}) '.format(vf = self.volume_fraction, r = radius, cx=center[0], cy = center[1], cz = center[2]))
+                else:
+                    self.declined_shapes+=1
 
+                print('volume fraction now:{vf:.3f}'.format(vf=self.volume_fraction/self.volume_fraction_threshold*100), end = '\r')
+            print('spheres accepted:{ac} and declined: {dc}'.format(ac = self.shapes, dc = self.declined_shapes))
             
     def __generate_sphere(self, radius, center, nonoverlapping):
         """

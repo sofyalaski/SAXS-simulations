@@ -124,15 +124,18 @@ def plot_FTI_version(custom_version, torch_version, qx, slice_number = None, pat
         plt.show()
 
     
-def plot_Q_vs_I(binned_data, xlim = None, path = None):
+def plot_Q_vs_I(binned_data, yerr = 'ISigma', xlim = None, path = None):
     """
     After the rebinning procedure plot Intensity I vs the scattering angle Q on log-scale
     input:
         pandas DataFrame with calculated values
+        yerr(optional) : the type of uncertainty to show on plot. Must be calculated and present in the df
+        
         xlim(optional) : the limit of the x-axis
         path(optional) : path to save figure
+
     """
-    binned_data.plot('Q', 'I', yerr = 'IError', 
+    binned_data.plot('Q', 'I', yerr = yerr, 
             figsize=(6,6),logx = True, logy = True, xlabel = 'q', ylabel = 'I', title = 'rebinned Q vs I')
     if xlim:
         plt.xlim(xlim[0], xlim[1]) # e.g. (10**(-2), 10**(-1))

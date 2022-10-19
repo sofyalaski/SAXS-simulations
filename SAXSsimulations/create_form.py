@@ -43,11 +43,11 @@ class DensityData:
         self.density.pin_memory()
 
 
-    def calculate_torch_FTI_3D(self, device = 'cuda', slice = None):
+    def calculate_torch_FTI(self, device = 'cuda', slice = None):
         """
         Calculates Fourier transform of a 3D box with torch fftn and shifts to nyquist frequency
         input:
-            device: to use the GPU
+            device: 'cpu' or 'cuda' for use of the GPU, can optionaly specify the gpu id 'cuda:1'
             slice: if None, the central slice will be assigned to the attribute FTI_slice_torch
         """
         try:
@@ -60,66 +60,74 @@ class DensityData:
                 slice = self.nPoints//2+1
             self.FTI_slice_torch = self.FTI_torch[slice,:,:]
         except RuntimeError:
-            print("The simulation is too big to fit into GPU memory. The custom fft method will be used ")
+            print("The simulation is too big to fit into GPU memory. The custom fft method <> should be used ")
 
-    def calculate_custom_per_axis(self, device = 'cuda',slice = None):
-        if slice is None:
-            slice = self.nPoints//2+1
+    def calculate_custom_FTI(self, three_d = False, slice = None, device = 'cuda', less_memory_use = True):
         FT = self.density.type(torch.complex128)
-        for i in range(FT.shape[1]):
-            for j in range(FT.shape[2]):    
-                if FT[:,i,j].any():
-                    FT_1D = FT[:,i,j].to(device)
-                    FT_1D = torch.fft.fft(FT_1D, norm = 'forward')
-                    FT[:,i,j] = FT_1D.cpu()
-                    del FT_1D
-                    
-        FT = torch.fft.fftshift(FT) # shifts in 1 direction 
-        FT_slice = torch.fft.fft2(FT[slice,:,:].to(device), norm = 'forward') # ft2 at slice
-        FT_slice = torch.fft.fftshift(FT_slice) # shift the slice
-        FTI = torch.abs(FT_slice)**2
-        self.FTI_slice_custom_per_axis = FTI.cpu().detach()
-
-    def calculate_custom_FTI_3D(self, device = 'cuda'):
-        """
-        calculate the 3D FFT via 2D FFT and then the last 1D FFT
-        """
-        try:
-            FT = self.density.type(torch.complex128).to(device)
-            for k in range(FT.shape[0]):
-                if FT[k,:,:].any():
-                    FT[k,:,:] = torch.fft.fft2(FT[k,:,:], norm = 'forward')
-            for i in range(FT.shape[1]):
-                for j in range(FT.shape[2]):                
-                    FT[:,i,j] = torch.fft.fft(FT[:,i,j], norm = 'forward')
+        if three_d: 
+            if less_memory_use ==  True and device == 'cuda':
+                for k in range(FT.shape[0]):
+                    if FT[k,:,:].any():
+                        FT_2D = FT[k,:,:].to(device)
+                        FT_2D = torch.fft.fft2(FT_2D, norm = 'forward')
+                        FT[k,:,:] = FT_2D.cpu()
+                        del FT_2D
+                for i in range(FT.shape[1]):
+                    for j in range(FT.shape[2]):    
+                        #if FT[:,i,j].any():
+                        FT_1D = FT[:,i,j].to(device)
+                        FT_1D = torch.fft.fft(FT_1D, norm = 'forward')
+                        FT[:,i,j] = FT_1D.cpu()
+                        del FT_1D
+                
+            else:
+                if device == 'cuda':
+                    try:
+                        FT = FT.to(device)
+                    except RuntimeError:
+                        print('The matrix is too big. Use `less_memory_use` option. ')
+                for k in range(FT.shape[0]):
+                    if FT[k,:,:].any():
+                        FT[k,:,:] = torch.fft.fft2(FT[k,:,:], norm = 'forward')
+                for i in range(FT.shape[1]):
+                    for j in range(FT.shape[2]):                
+                        FT[:,i,j] = torch.fft.fft(FT[:,i,j], norm = 'forward')
+                FT = FT.cpu().detach()
 
             FT = torch.fft.fftshift(FT)
             FTI = torch.abs(FT)**2
-            self._FTI_custom = FTI.cpu().detach()
-        except RuntimeError:
-            print('vla')
-
-
-    def calculate_custom_FTI_3D_slice(self, device = 'cuda', slice = None):
-        """
-        calculate the 3D FFT AT CERTAIN SLICE via 2D FFT and then the last 1D FFT
-        input:
-            device: to use the GPU
-            slice: if None, the central will be returned
-        """
-        if slice is None:
-            slice = self.nPoints//2+1
-        FT = self.density.type(torch.complex128).to(device)
-        for i in range(FT.shape[1]):
-            for j in range(FT.shape[2]):      
-                if FT[:,i,j].any():          
-                    FT[:,i,j] = torch.fft.fft(FT[:,i,j], norm = 'forward')
-        FT = torch.fft.fftshift(FT) # shifts in 1 direction 
-        FT_slice = torch.fft.fft2(FT[slice,:,:], norm = 'forward') # ft2 at slice
-        FT_slice = torch.fft.fftshift(FT_slice) # shift the slice
-        FTI = torch.abs(FT_slice)**2
-        self.FTI_slice_custom = FTI.cpu().detach()
+            self._FTI_custom = FTI
+        else:
+            if slice is None:
+                slice = self.nPoints//2+1 # is slice is None get  central slice
         
+            if less_memory_use ==  True and device == 'cuda':
+                for i in range(FT.shape[1]):
+                    for j in range(FT.shape[2]):    
+                        if FT[:,i,j].any():
+                            FT_1D = FT[:,i,j].to(device)
+                            FT_1D = torch.fft.fft(FT_1D, norm = 'forward')
+                            FT[:,i,j] = FT_1D.cpu()
+                            del FT_1D
+            else:
+                if device =='cuda':
+                    try:
+                        FT = FT.to(device)
+                    except RuntimeError:
+                        print('The matrix is too big. Use `less_memory_use` option. ')
+                for i in range(FT.shape[1]):
+                    for j in range(FT.shape[2]):      
+                        if FT[:,i,j].any():          
+                            FT[:,i,j] = torch.fft.fft(FT[:,i,j], norm = 'forward')
+                FT = FT.cpu().detach()
+
+                    
+            FT = torch.fft.fftshift(FT) # shifts in 1 direction 
+            FT_slice = torch.fft.fft2(FT[slice,:,:].to(device), norm = 'forward') # ft2 at slice
+            FT_slice = torch.fft.fftshift(FT_slice) # shift the slice
+            FTI = torch.abs(FT_slice)**2
+            self._FTI_custom = FTI.cpu().detach()
+
 class Simulation(DensityData):
 
     """ A proper simulation class inheriting FT functions from DensityData. Given size and the number of points in the simulation
@@ -153,10 +161,7 @@ class Simulation(DensityData):
         """
         Set the sinc'ed FTI
         """
-        if 'FTI_slice_custom' in dir(self):
-            return self.__sinc(self.FTI_slice_custom)
-        else:
-            return self.__sinc(self.FTI_custom)
+        return self.__sinc(self._FTI_custom)
 
     def __initialize_box(self):
         """
@@ -200,6 +205,9 @@ class Simulation(DensityData):
         else:
             self.sinc = torch.abs(torch.special.sinc(self._q3x*self.grid_space/2/np.pi)*torch.special.sinc(self._q3y*self.grid_space/2/np.pi)**torch.special.sinc(self._q3z*self.grid_space/2/np.pi))**2
         FTI_sinced = FTI * self.sinc
+        
+        #IPoisson = torch.from_numpy(np.abs(np.random.poisson(lam=100, size=FTI_sinced.shape)-100))
+        #FTI_sinced = FTI_sinced# *0.0001*FTI_sinced.max()*IPoisson
         return FTI_sinced       
 
     ################################   The rebinnning functions   ################################
@@ -486,11 +494,11 @@ class Simulation(DensityData):
                 'background':0., 
                 'sld':1.,
                 'sld_solvent':0.,
-                'radius_pd': self.rWidth/self.rMean, 
+                'radius_pd': self.rWidth/self.rMean, #0.1
                 'radius_pd_type': 'gaussian', 
                 'radius_pd_n': 35, 
                 'length': self.hMean*10, 
-                'length_pd': self.hWidth/self.hMean, 
+                'length_pd': self.hWidth/self.hMean, #0.15
                 'length_pd_type': 'gaussian', 
                 'length_pd_n': 35,          
                 'theta':self.theta,    
