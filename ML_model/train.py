@@ -39,9 +39,9 @@ def loss_forward_mmd(out, y):
 
     return l_forw_fit, l_forw_mmd
 
-def loss_backward_mmd(x, y):
-    x_samples, x_samples_jac = model.model(y, rev=True) 
-    MMD = losses.backward_mmd(x, x_samples)
+def loss_backward_mmd(x_class, x_features, y):
+    [x_samples_class, x_samples_features], x_samples_jac = model.model(y, rev=True) 
+    MMD = losses.backward_mmd(x_class, x_samples_class) + losses.backward_mmd(x_features, x_samples_features)
     if c.mmd_back_weighted:
         MMD *= torch.exp(- 0.5 / c.y_uncertainty_sigma**2 * losses.l2_dist_matrix(y, y))
     return c.lambd_mmd_back * torch.mean(MMD)
@@ -52,8 +52,8 @@ def loss_reconstruction(out_y, x):
     if c.ndim_pad_zy:
         cat_inputs.append(out_y[:, c.ndim_z:-c.ndim_y] + c.add_pad_noise * noise_batch(c.ndim_pad_zy)) # list with 2 tensor
     cat_inputs.append(out_y[:, -c.ndim_y:] + c.add_y_noise * noise_batch(c.ndim_y)) # list with 3 tensors
-    x_reconstructed, x_reconstructed_jac = model.model(torch.cat(cat_inputs, 1), rev=True) # concatenate list elements along axis 1
-    return c.lambd_reconstruct * losses.l2_fit(x_reconstructed, x)
+    x_reconstructed_class, x_reconstructed_features, x_reconstructed_jac = model.model(torch.cat(cat_inputs, 1), rev=True) # concatenate list elements along axis 1
+    return c.lambd_reconstruct * losses.l2_fit(x_reconstructed, x) # needs fix
 
 def train_epoch(i_epoch, test=False):
 
@@ -86,15 +86,19 @@ def train_epoch(i_epoch, test=False):
         if c.add_y_noise > 0:
             y += c.add_y_noise * noise_batch(c.ndim_y)
 
-        if c.ndim_pad_x:
+        if c.ndim_pad_x_class:
             # x = [x, pad_x]
-            x = torch.cat((x, c.add_pad_noise * noise_batch(c.ndim_pad_x)), dim=1)
+            x_class = torch.cat((x[:,:3], c.add_pad_noise * noise_batch(c.ndim_pad_x_class)), dim=1)
+        
+        if c.ndim_pad_x_features:
+            # x = [x, pad_x]
+            x_features = torch.cat((x[:,3:], c.add_pad_noise * noise_batch(c.ndim_pad_x_features)), dim=1)
         if c.ndim_pad_zy:
             y = torch.cat((c.add_pad_noise * noise_batch(c.ndim_pad_zy), y), dim=1)
         # y = [z, pad_yz, y]
         y = torch.cat((noise_batch(c.ndim_z), y), dim=1)
 
-        out_y, out_y_jac = model.model(x)
+        out_y, out_y_jac = model.model([x_class,x_features])
         # tuple with output[0] and jacobian[1]
         if c.train_max_likelihood:
             batch_losses.append(loss_max_likelihood(out_y, y))
@@ -103,7 +107,7 @@ def train_epoch(i_epoch, test=False):
             batch_losses.extend(loss_forward_mmd(out_y, y))
 
         if c.train_backward_mmd:
-            batch_losses.append(loss_backward_mmd(x, y))
+            batch_losses.append(loss_backward_mmd(x_class,x_features, y))
 
         if c.train_reconstruction:
             batch_losses.append(loss_reconstruction(out_y.data, x))
@@ -120,9 +124,9 @@ def train_epoch(i_epoch, test=False):
         monitoring.show_cov(out_y[:, :c.ndim_z])
 
         if c.test_time_functions:
-            out_x, out_x_jac = model.model(y, rev=True) 
+            out_x_class, out_x_features, out_x_jac = model.model(y, rev=True) 
             for f in c.test_time_functions:
-                f(out_x, out_y, x, y)
+                f(out_x_class, out_x_features, out_y, x_class,x_features, y)
 
         nograd.__exit__(None, None, None)
     return np.mean(loss_history, axis=0)

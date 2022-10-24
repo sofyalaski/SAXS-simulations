@@ -53,7 +53,7 @@ class Cylinder(Simulation):
             single[boolean] : create a single sphere in a box?        
         """
         if self.theta is None:
-            self.theta = np.random.choice([0,90,180,270,360])
+            self.theta = 0
             self.theta_distribution = 'gaussian'
             self.phi_distribution = 'uniform'
 

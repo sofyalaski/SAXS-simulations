@@ -21,7 +21,7 @@ test_time_functions = []
 #######################
 
 # Initial learning rate
-lr_init         = 1.0e-5
+lr_init         = 1.0e-3
 #Batch size
 batch_size      = 500
 # Total number of epochs to train for
@@ -41,12 +41,14 @@ adam_betas = (0.9, 0.95)
 #####################
 #  Data dimensions  #
 #####################
-ndim_x     = 10
-ndim_pad_x = 540
+ndim_x_class     = 3
+ndim_x_features     = 7
+ndim_pad_x_class = 710
+ndim_pad_x_features = 280
 
 ndim_y     = 512
-ndim_z     = 2
-ndim_pad_zy = 36
+ndim_z     = 200
+ndim_pad_zy = 288 
 
 # Overwrite or import data loaders here.
 # See dkfz_train.py for reference.
@@ -54,7 +56,7 @@ ndim_pad_zy = 36
 
 train_loader, test_loader = None, None
 
-assert (ndim_x + ndim_pad_x 
+assert (ndim_x_class + ndim_x_features + ndim_pad_x_class+ ndim_pad_x_features 
         == ndim_y + ndim_z + ndim_pad_zy), "Dimensions don't match up"
 
 ############

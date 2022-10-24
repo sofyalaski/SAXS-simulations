@@ -22,9 +22,14 @@ class DensityData:
     def set_density(self, density):
         """
         set density matrix from numpy array. Calculate the number of points in first(!) dimension
+        inputs:
+            density a tensor with elctron density values
         """
-        self.density = torch.from_numpy(density)
-        self.nPoints = self.density.shape[0]
+        self.density = density
+        self.nPoints = min(self.density.shape)
+        self.grid = np.linspace(-self.nPoints/2,self.nPoints/2,self.nPoints)
+        self.box_size= self.nPoints
+        self.grid_space = self.box_size/(self.nPoints-1)
 
     @property
     def FTI(self):
@@ -49,17 +54,20 @@ class DensityData:
         input:
             device: 'cpu' or 'cuda' for use of the GPU, can optionaly specify the gpu id 'cuda:1'
             slice: if None, the central slice will be assigned to the attribute FTI_slice_torch
+        Warning: UserWarning: Casting complex values to real discards the imaginary part usually appears, it is however not affecting anything, becausethe tensor was just casted into complex one and in this check Can only have real values
         """
+        
         try:
-            density = self.density.to(device)
-            FT = torch.fft.fftn(density, norm = 'forward')
-            FT = torch.fft.fftshift(FT)
-            FTI = torch.abs(FT)**2
-            self.FTI_torch = FTI.cpu().detach()
+            FT = self.density.to(device)
+            FT = torch.fft.fftn(FT, norm = 'forward')
+            FT = torch.fft.fftshift(FT).cpu().detach()
+            FT = torch.abs(FT)**2
+            self.FTI_torch = FT
             if slice is None:
                 slice = self.nPoints//2+1
             self.FTI_slice_torch = self.FTI_torch[slice,:,:]
         except RuntimeError:
+            del FT
             print("The simulation is too big to fit into GPU memory. The custom fft method <> should be used ")
 
     def calculate_custom_FTI(self, three_d = False, slice = None, device = 'cuda', less_memory_use = True):
@@ -73,8 +81,7 @@ class DensityData:
                         FT[k,:,:] = FT_2D.cpu()
                         del FT_2D
                 for i in range(FT.shape[1]):
-                    for j in range(FT.shape[2]):    
-                        #if FT[:,i,j].any():
+                    for j in range(FT.shape[2]):  
                         FT_1D = FT[:,i,j].to(device)
                         FT_1D = torch.fft.fft(FT_1D, norm = 'forward')
                         FT[:,i,j] = FT_1D.cpu()
@@ -85,6 +92,7 @@ class DensityData:
                     try:
                         FT = FT.to(device)
                     except RuntimeError:
+                        del FT
                         print('The matrix is too big. Use `less_memory_use` option. ')
                 for k in range(FT.shape[0]):
                     if FT[k,:,:].any():
@@ -95,8 +103,9 @@ class DensityData:
                 FT = FT.cpu().detach()
 
             FT = torch.fft.fftshift(FT)
-            FTI = torch.abs(FT)**2
-            self._FTI_custom = FTI
+            FT = torch.abs(FT)**2
+            self._FTI_custom = FT
+            del FT
         else:
             if slice is None:
                 slice = self.nPoints//2+1 # is slice is None get  central slice
@@ -114,6 +123,7 @@ class DensityData:
                     try:
                         FT = FT.to(device)
                     except RuntimeError:
+                        del FT
                         print('The matrix is too big. Use `less_memory_use` option. ')
                 for i in range(FT.shape[1]):
                     for j in range(FT.shape[2]):      
@@ -125,8 +135,45 @@ class DensityData:
             FT = torch.fft.fftshift(FT) # shifts in 1 direction 
             FT_slice = torch.fft.fft2(FT[slice,:,:].to(device), norm = 'forward') # ft2 at slice
             FT_slice = torch.fft.fftshift(FT_slice) # shift the slice
-            FTI = torch.abs(FT_slice)**2
-            self._FTI_custom = FTI.cpu().detach()
+            FT = torch.abs(FT_slice)**2
+            self._FTI_custom = FT.cpu().detach()
+    ################################   The Fourier Transformation functions   ################################
+
+
+    def mask_FT_to_sphere(self, instance):
+        """
+        The averaging in rebinning function is based on the angles present in the scattering angles Q matrix.The values in the matrix
+        have circular symmetry and the values in the corners of the matrix are underrepresented and will not be considered in the rebinning.
+        """
+        
+        x2x = self.grid[None,:]
+        x2y = self.grid[:,None]
+        radius = self.nPoints/2
+        if len(instance.shape)==2:
+            
+            x2x,x2y  = np.ogrid[:instance.shape[0], :instance.shape[1]]
+            center = (int(instance.shape[0]//2+1), int(instance.shape[1]//2+1))
+            radius = self.nPoints/2
+            mask = torch.from_numpy((x2x-center[0])**2 + (x2y-center[1])**2 < radius**2) # center = 0
+            return torch.where(mask, instance, np.nan)
+
+        else:
+            mask = DensityData()
+            mask.set_density(torch.zeros_like(instance))
+            x2y,x2z  = np.ogrid[:instance.shape[1], :instance.shape[2]]
+            center = (int(instance.shape[0]//2+1), int(instance.shape[1]//2+1), int(instance.shape[2]//2+1))
+            radius = self.nPoints//2# last grid point fully covering the radius is considered , sphere is symmetric so work in both directions
+            if len(mask.grid[mask.grid == 0])==1:
+                for i in range(radius): 
+                    d = mask.grid_space*i # calculate the distance grom the center to the slice
+                    radius_at_d = np.sqrt(radius**2-d**2) # calculate the radius of circle at slice using Pythagoras Theorem
+                    circle_at_d = (x2y-center[1])**2 + (x2z-center[2])**2 < radius_at_d**2 # mask the circle location
+                    mask.density[center[0]+i,circle_at_d] = 1
+                    mask.density[center[0]-i,circle_at_d] = 1
+            return torch.where(mask.density.type(torch.bool),instance, np.nan)
+
+
+
 
 class Simulation(DensityData):
 
@@ -306,44 +353,6 @@ class Simulation(DensityData):
         elif self.shape == 'cylinder':
             return binned_data[['Q', 'I', 'IStd', 'ISEM', 'IError', 'ISigma', 'QStd', 'QSEM', 'QSigma','qy', 'qy_sem', 'qz', 'qz_sem']]
 
-    def __mask_FT_to_sphere(self):
-        """
-        The averaging in rebinning function is based on the angles present in the scattering angles Q matrix.The values in the matrix
-        have circular symmetry and the values in the corners of the matrix are underrepresented and will not be considered in the rebinning.
-        """
-        x2x = self.grid[None,:]
-        x2y = self.grid[:,None]
-        radius = self.box_size//2
-        if len(self.FTI_sinc.shape)==2:
-            mask = (x2x)**2 + (x2y)**2 < radius**2 # center = 0
-            self.FTI_sinc_masked = torch.where(mask, self.FTI_sinc, 0)
-            self.Q_masked = torch.where(mask, self.Q[self.nPoints//2+1,:,:], 0)
-        else:
-            mask = Simulation(self.box_size, self.nPoints)
-            if len(mask.grid[mask.grid == 0])==1:
-                central_slice = torch.argwhere(mask.grid==0)[0,0] # start with the central slice
-                for i in range(int(radius//mask.grid_space)): # last grid point fully covering the radius is considered , sphere is symmetric so work in both directions
-                    d = mask.grid_space*i # calculate the distance grom the center to the slice
-                    radius_at_d = torch.sqrt(radius**2-d**2) # calculate the radius of circle at slice using Pythagoras Theorem
-                    circle_at_d = (x2x)**2 + (x2y)**2 < radius_at_d**2 # mask the circle location
-                    mask._box[central_slice+i,circle_at_d] = 1 # density inside sphere
-                    mask._box[central_slice-i,circle_at_d] = 1
-            else:
-                # if the center of the sphere in between of two grid points, find those points and do the same in both dierections
-                nearest_bigger_ind = torch.argwhere(mask.grid>0)[0,0]
-                for i in range(int(radius//self.grid_space)): # last grid point fully covering the radius is considered  
-                    d1 = self.grid_space*i  - self.grid[nearest_bigger_ind-1]
-                    d2 = self.grid_space*i + self.grid[nearest_bigger_ind]
-                    radius_at_d1 = torch.sqrt(radius**2-d1**2)
-                    radius_at_d2 = torch.sqrt(radius**2-d2**2)
-                    circle_at_d1 = (x2x)**2 + (x2y)**2 < radius_at_d1**2
-                    circle_at_d2 = (x2x)**2 + (x2y)**2 < radius_at_d2**2
-                    mask._box[nearest_bigger_ind+i,circle_at_d1] = 1
-                    mask._box[nearest_bigger_ind-1-i,circle_at_d2] = 1
-            
-            self.FTI_sinc_masked = torch.where(mask.density, self.FTI_sinc, np.nan)
-            self.Q_masked = torch.where(mask.density, self.Q, np.nan)
-
 
     def __reBin_sphere(self, nbins, IEMin, QEMin, slice = 'center'):
         """
@@ -356,7 +365,9 @@ class Simulation(DensityData):
             slice: if 'center' the central slice computed, if other integer, the slice at the integer is computed otherwise the 3D version is computed, 
         
         """
-        self.__mask_FT_to_sphere() # mask the Q to the sphere
+        
+        self.FTI_sinc_masked = self.mask_FT_to_sphere(self.FTI_sinc)
+        self.Q_masked = self.mask_FT_to_sphere(self.Q if len(self.FTI_sinc.shape) ==3 else self.Q[self.nPoints//2+1,:,:])
         
         Q_masked_no_nan = self.Q_masked[~self.Q_masked.isnan()]
         FTI_masked_no_nan = self.FTI_sinc_masked[~self.FTI_sinc_masked.isnan()]
@@ -501,14 +512,11 @@ class Simulation(DensityData):
                 'length_pd': self.hWidth/self.hMean, #0.15
                 'length_pd_type': 'gaussian', 
                 'length_pd_n': 35,          
-                'theta':self.theta,    
-                'theta_pd': self.rotWidth ,
-                'theta_pd_type':'gaussian',
-                'theta_pd_n':35,
-                'phi':0,
-                'phi_pd': 360,
-                'phi_pd_type':'uniform',
-                'phi_pd_n':10
+                'theta':90,    
+                'phi':self.theta,
+                'phi_pd': self.rotWidth,
+                'phi_pd_type':'gaussian',
+                'phi_pd_n':35
                 })
         self.__create_sas_model()
                 
