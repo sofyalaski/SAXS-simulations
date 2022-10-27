@@ -8,7 +8,8 @@ mp_api.key
 MOF.h5
 test_simulations_sas.ipynb
 debugging.ipynb
-.ipynb_checkouts
+.ipynb_checkouts/
+.vscode/
 test_simulations_sas.ipynb
 
 ## Ignore Visual Studio temporary files, build results, and
