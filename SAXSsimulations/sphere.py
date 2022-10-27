@@ -25,7 +25,8 @@ class Sphere(Simulation):
         self.__dict__.update((k, v) for k, v in kwargs.items() if k in keys)
         if self.rWidth is None:
             self.rWidth = 0.1
-        self.__sphere_in_box(single, nonoverlapping)
+        if self.volume_fraction_threshold != 0:
+            self.__sphere_in_box(single, nonoverlapping)
          
 
     def __sphere_in_box(self, single, nonoverlapping):
@@ -85,9 +86,11 @@ class Sphere(Simulation):
         # if central slice on grid:
         if len(self.grid[self.grid == center[0]])==1:
             central_slice = torch.argwhere(self.grid==center[0])[0,0] # start with the central slice
+            x_r_s = central_slice-int(radius//self.grid_space)
+            x_r_b = central_slice+int(radius//self.grid_space)+1
             for i in range(int(radius//self.grid_space)): # last grid point fully covering the radius is considered , sphere is symmetric so work in both directions
                 d = self.grid_space*i # calculate the distance grom the center to the slice
-                radius_at_d = torch.sqrt(radius**2-d**2) # calculate the radius of circle at slice using Pythagoras Theorem
+                radius_at_d = np.sqrt(radius**2-d**2) # calculate the radius of circle at slice using Pythagoras Theorem
                 circle_at_d = (x2x-center[1])**2 + (x2y-center[2])**2 < radius_at_d**2 # mask the circle location
                 if nonoverlapping:
                     empty_box[central_slice+i,circle_at_d] = 1 # density inside sphere
@@ -98,6 +101,8 @@ class Sphere(Simulation):
         else:
             # if the center of the sphere in between of two grid points, find those points and do the same in both dierections
             nearest_bigger_ind = torch.argwhere(self.grid>center[0])[0,0]
+            x_r_s = nearest_bigger_ind-int(radius//self.grid_space)-1
+            x_r_b = nearest_bigger_ind+int(radius//self.grid_space)+1
             for i in range(int(radius//self.grid_space)): # last grid point fully covering the radius is considered  
                 d1 = self.grid_space*i + center[0] - self.grid[nearest_bigger_ind-1]
                 d2 = self.grid_space*i + self.grid[nearest_bigger_ind]-center[0]
@@ -112,8 +117,12 @@ class Sphere(Simulation):
                     self._box[nearest_bigger_ind+i,circle_at_d1] = 1
                     self._box[nearest_bigger_ind-1-i,circle_at_d2] = 1
         if nonoverlapping:
-            if int(torch.logical_and(self._box, empty_box).sum()) == 0:
-                self._box = torch.logical_or(self._box, empty_box)
+            y_r_s = torch.argwhere(self.grid>=center[1] - radius)[0,0]
+            y_r_b = torch.argwhere(self.grid<=center[1] + radius)[-1,0]+1
+            z_r_s = torch.argwhere(self.grid>=center[2] - radius)[0,0]
+            z_r_b = torch.argwhere(self.grid<=center[2] + radius)[-1,0]+1
+            if int(torch.logical_and(self._box[x_r_s:x_r_b, y_r_s: y_r_b, z_r_s:z_r_b], empty_box[x_r_s:x_r_b,y_r_s: y_r_b, z_r_s:z_r_b]).sum()) == 0:
+                self._box[x_r_s:x_r_b, y_r_s: y_r_b, z_r_s:z_r_b] = torch.logical_or(self._box[x_r_s:x_r_b, y_r_s: y_r_b, z_r_s:z_r_b], empty_box[x_r_s:x_r_b, y_r_s: y_r_b, z_r_s:z_r_b])
             else:
                 success = False
         return success

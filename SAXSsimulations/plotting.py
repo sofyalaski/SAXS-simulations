@@ -15,7 +15,7 @@ def plot_slices(density,grid, direction  = 'x', path = None):
         path: path to save figure 
     """
     nPoints = density.shape[0]
-    fig,axs = plt.subplots(1,5,figsize = (20,10))
+    fig,axs = plt.subplots(1,5,figsize = (20,5))
     
     for i, sl in enumerate([1,3,5,7,9]):
         ax = axs[i]

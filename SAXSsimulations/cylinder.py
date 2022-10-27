@@ -36,7 +36,8 @@ class Cylinder(Simulation):
             self.rWidth = 0.1
         if self.hWidth is None:
             self.hWidth = 0.15
-        self.__cylinder_in_box(single)
+        if self.volume_fraction_threshold != 0:
+            self.__cylinder_in_box(single)
         
     
     def __cylinder_in_box(self,single):

@@ -47,8 +47,8 @@ ndim_pad_x_class = 710
 ndim_pad_x_features = 280
 
 ndim_y     = 512
-ndim_z     = 200
-ndim_pad_zy = 288 
+ndim_z     = 10
+ndim_pad_zy = 478 
 
 # Overwrite or import data loaders here.
 # See dkfz_train.py for reference.

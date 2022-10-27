@@ -11,13 +11,13 @@ import config as c
 input1 = Ff.InputNode(c.ndim_x_class + c.ndim_pad_x_class, name='input_class')
 input2 = Ff.InputNode(c.ndim_x_features + c.ndim_pad_x_features, name='input_features')
 
-def subnet1(dims_in, dims_out):
+def subnet2(dims_in, dims_out):
     return nn.Sequential(nn.Linear(dims_in, c.hidden_layer_sizes), nn.ReLU(),
                         nn.Linear(c.hidden_layer_sizes,  c.hidden_layer_sizes//2), nn.ReLU(),
                         nn.Linear(c.hidden_layer_sizes//2,  dims_out))
 
 
-def subnet2(dims_in, dims_out):
+def subnet1(dims_in, dims_out):
     return nn.Sequential(nn.Linear(dims_in, c.hidden_layer_sizes*2), nn.ReLU(),
                         nn.Linear(c.hidden_layer_sizes*2,  c.hidden_layer_sizes), nn.ReLU(),
                         nn.Linear(c.hidden_layer_sizes,  dims_out))
@@ -26,8 +26,12 @@ RNVP1 = Ff.Node([input1.out0],Fm.RNVPCouplingBlock, {'subnet_constructor':subnet
 permute_class1 = Ff.Node([RNVP1.out0], Fm.PermuteRandom, {'seed':1}, name='class_permute_1')
 RNVP2 = Ff.Node([permute_class1.out0],Fm.RNVPCouplingBlock, {'subnet_constructor':subnet1, 'clamp':c.exponent_clamping}, name='class_coupling_2')
 permute_class2 = Ff.Node([RNVP2.out0], Fm.PermuteRandom, {'seed':2}, name='class_permute_2')
+RNVP3 = Ff.Node([permute_class2.out0],Fm.RNVPCouplingBlock, {'subnet_constructor':subnet1, 'clamp':c.exponent_clamping}, name='class_coupling_3')
+permute_class3 = Ff.Node([RNVP3.out0], Fm.PermuteRandom, {'seed':1}, name='class_permute_3')
+RNVP4 = Ff.Node([permute_class3.out0],Fm.RNVPCouplingBlock, {'subnet_constructor':subnet1, 'clamp':c.exponent_clamping}, name='class_coupling_4')
+permute_class4 = Ff.Node([RNVP4.out0], Fm.PermuteRandom, {'seed':4}, name='class_permute_4')
 
-concat = Ff.Node([permute_class2.out0, input2.out0], Fm.Concat, {}, name='Concat')
+concat = Ff.Node([permute_class4.out0, input2.out0], Fm.Concat, {}, name='Concat')
 
 RNVP5 = Ff.Node([concat.out0],Fm.RNVPCouplingBlock, {'subnet_constructor':subnet2, 'clamp':c.exponent_clamping}, name='feature_coupling_1')
 permute_class5 = Ff.Node([RNVP5.out0], Fm.PermuteRandom, {'seed':1}, name='feature_permute_1')
@@ -36,7 +40,7 @@ permute_class6 = Ff.Node([RNVP6.out0], Fm.PermuteRandom, {'seed':2}, name='featu
 output = Ff.OutputNode([permute_class6.out0], name='output')
 
 
-model = Ff.GraphINN([input1, input2, RNVP1, permute_class1, RNVP2, permute_class2, concat,
+model = Ff.GraphINN([input1, input2, RNVP1, permute_class1, RNVP2, permute_class2, RNVP3, permute_class3, RNVP4, permute_class4, concat,
                          RNVP5, permute_class5, RNVP6, permute_class6,  output], verbose=c.verbose_construction)
 model.to(c.device)
 

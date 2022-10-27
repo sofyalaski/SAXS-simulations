@@ -1,3 +1,4 @@
+#!/home/slaskina/.conda/envs/fft/bin/python
 import pyopencl as cl
 cl.create_some_context()
 import numpy as np
@@ -7,14 +8,20 @@ import sasmodels.core as core
 import sasmodels.direct_model as direct_model
 
 class Hdf:
-    def __init__(self,output_id, folder, shape, *args):
+    """    A class to create a shape's simulations with SasModels and write the metadata and simulation into an HDF file in given folder in desired resolution and in 2D or 1D  """
+    def __init__(self,output_id, folder, shape, size, twoD, *args):
         self.outputFile = folder + output_id +'.nxs'
         self.shape = shape
+        self.twoD = twoD
+        self.resolution = size
         self.__create_parameters(*args)
         self.__init_sas_model()
         self.__create_structure()
 
     def __create_structure(self):
+        """
+        writes into an HDF
+        """
         with h5py.File(self.outputFile, "w") as f:
             entry = f.create_group("entry")
             q = entry.create_dataset("qx", data=self.qx_sas, dtype='f')
@@ -41,10 +48,12 @@ class Hdf:
                 properties.create_dataset(key, data = self.parameters_dict[key])
 
     def __create_parameters(self, *args):
+        """ samples parameters"""
         self.size = 10
+        self.voxel_centers_dist = self.size/self.resolution
         self.radius = -1
         while self.radius <0:
-            self.radius = np.random.normal(loc = self.size*0.005, scale= self.size*0.01 ) 
+            self.radius = np.random.normal(loc = self.size*0.02, scale= self.size*0.01 ) 
         self.radius_polydispersity = -1 
         while self.radius_polydispersity <0:
             self.radius_polydispersity = np.random.normal(loc = 0.05, scale = 0.03)
@@ -71,20 +80,20 @@ class Hdf:
         if self.shape == 'cylinder':
             self.length = -1
             while self.length<0:
-                self.length = np.random.normal(loc = self.size*0.1, scale= self.size*0.01 )
+                self.length = np.random.normal(loc = self.size*0.1, scale= self.size*0.1 )
             self.length_polydispersity = -1
             while self.length_polydispersity<0:
                 self.length_polydispersity = np.random.normal(loc = 0.08, scale = 0.05)
-            self.theta = 90
-            self.phi = 0
-            self.phi_distr = 'uniform'
-            self.phi_pd = 4.5
+            #self.theta = 90
+            #self.phi = 0
+            #self.phi_distr = 'uniform'
+            #self.phi_pd = 4.5
 
             self.parameters_dict =  {'radius': self.radius, 
                                 'background':0., 
                                 'sld':1.,
                                 'sld_solvent':0.,
-                                'theta': self.theta,
+                                #'theta': self.theta,
                                 'radius_pd': self.radius_polydispersity,
                                 'radius_pd_type': 'gaussian', 
                                 'radius_pd_n': 35,
@@ -92,30 +101,39 @@ class Hdf:
                                 'length_pd': self.length_polydispersity,
                                 'length_pd_type':'gaussian',
                                 'length_pd_n':35,
-                                'phi':self.phi,
-                                'phi_pd': self.phi_pd,
-                                'phi_pd_type': self.phi_distr,
-                                'phi_pd_n':10}
+                                #'phi':self.phi,
+                                #'phi_pd': self.phi_pd,
+                                #'phi_pd_type': self.phi_distr,
+                                #'phi_pd_n':10
+            }
 
 
 
     def __init_sas_model(self):
-        model = core.load_model(self.shape)
-        self.qx_sas = np.linspace(-np.pi/self.size/2, np.pi/self.size/2, 256)
-
-        q2y = self.qx_sas + 0* self.qx_sas[:,np.newaxis]
-        q2z = self.qx_sas[:,np.newaxis] + 0* self.qx_sas
-        q2y = q2y.reshape(q2y.size)
-        q2z = q2z.reshape(q2z.size)
-        kernel=model.make_kernel([q2y, q2z])
+        """ creates SasModels kernel for sampled parameter in 2D or1D"""
+        if self.shape == 'hardsphere':
+            model = core.load_model("sphere@hardsphere")
+        else:
+            model = core.load_model(self.shape)
+        self.qx_sas = np.linspace(-np.pi/self.voxel_centers_dist, np.pi/self.voxel_centers_dist, self.resolution)
+        if self.twoD:
+            q2x = self.qx_sas + 0* self.qx_sas[:,np.newaxis]
+            q2y = self.qx_sas[:,np.newaxis] + 0* self.qx_sas
+            q2x = q2x.reshape(q2x.size)
+            q2y = q2y.reshape(q2y.size)
+            kernel=model.make_kernel([q2x, q2y])
+        else:
+            kernel=model.make_kernel( np.array(self.qx_sas[np.newaxis, :]))
         modelParameters_sas = model.info.parameters.defaults.copy()
         modelParameters_sas.update(self.parameters_dict)
         self.I_sas = direct_model.call_kernel(kernel, modelParameters_sas)
-        self.I_sas = self.I_sas.reshape(256,256)
+        if self.twoD:
+            self.I_sas = self.I_sas.reshape(self.resolution,self.resolution)
         model.release()
-        self.I_noisy = self.I_sas + np.random.poisson(self.I_sas) # adding some poison noise
-
-
+        #noise = np.random.poisson(self.I_sas, self.I_sas.shape)
+        #self.I_noisy = self.I_sas +noise  # adding some poison noise
+        noise = np.random.normal(loc = 1, scale = 0.1, size = self.I_sas.shape)
+        self.I_noisy = self.I_sas *noise 
 
 if __name__ == '__main__':
     for i in range(1,5001):

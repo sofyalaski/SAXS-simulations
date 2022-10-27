@@ -56,9 +56,9 @@ class DensityData:
             slice: if None, the central slice will be assigned to the attribute FTI_slice_torch
         Warning: UserWarning: Casting complex values to real discards the imaginary part usually appears, it is however not affecting anything, becausethe tensor was just casted into complex one and in this check Can only have real values
         """
-        
+        FT = self.density.type(torch.float64)
         try:
-            FT = self.density.to(device)
+            FT = FT.to(device)
             FT = torch.fft.fftn(FT, norm = 'forward')
             FT = torch.fft.fftshift(FT).cpu().detach()
             FT = torch.abs(FT)**2
@@ -71,7 +71,7 @@ class DensityData:
             print("The simulation is too big to fit into GPU memory. The custom fft method <> should be used ")
 
     def calculate_custom_FTI(self, three_d = False, slice = None, device = 'cuda', less_memory_use = True):
-        FT = self.density.type(torch.complex128)
+        FT = self.density.type(torch.float64)
         if three_d: 
             if less_memory_use ==  True and device == 'cuda':
                 for k in range(FT.shape[0]):
@@ -92,7 +92,6 @@ class DensityData:
                     try:
                         FT = FT.to(device)
                     except RuntimeError:
-                        del FT
                         print('The matrix is too big. Use `less_memory_use` option. ')
                 for k in range(FT.shape[0]):
                     if FT[k,:,:].any():
@@ -123,7 +122,6 @@ class DensityData:
                     try:
                         FT = FT.to(device)
                     except RuntimeError:
-                        del FT
                         print('The matrix is too big. Use `less_memory_use` option. ')
                 for i in range(FT.shape[1]):
                     for j in range(FT.shape[2]):      
