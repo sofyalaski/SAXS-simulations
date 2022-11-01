@@ -78,12 +78,14 @@ class DensityData:
                     if FT[k,:,:].any():
                         FT_2D = FT[k,:,:].to(device)
                         FT_2D = torch.fft.fft2(FT_2D, norm = 'forward')
+                        print((torch.cuda.memory_allocated()/1024**3), (torch.cuda.memory_cached()/1024**3))
                         FT[k,:,:] = FT_2D.cpu()
                         del FT_2D
                 for i in range(FT.shape[1]):
                     for j in range(FT.shape[2]):  
                         FT_1D = FT[:,i,j].to(device)
                         FT_1D = torch.fft.fft(FT_1D, norm = 'forward')
+                        print((torch.cuda.memory_allocated()/1024**3), (torch.cuda.memory_cached()/1024**3))
                         FT[:,i,j] = FT_1D.cpu()
                         del FT_1D
                 

@@ -6,6 +6,7 @@ import h5py
 import sasmodels
 import sasmodels.core as core
 import sasmodels.direct_model as direct_model
+import matplotlib.pyplot as plt
 
 class Hdf:
     """    A class to create a shape's simulations with SasModels and write the metadata and simulation into an HDF file in given folder in desired resolution and in 2D or 1D  """
@@ -150,3 +151,9 @@ if __name__ == '__main__':
             print(i/5000*100,'%')
         Hdf(f'{50+i:04}', '/home/slaskina/simulations/','hardsphere', volfraction[i%len(volfraction)])
 
+
+print(a.parameters_dict['radius'],a.parameters_dict['radius_pd'])
+plt.plot(a.qx_sas, a.I_noisy)
+plt.plot(a.qx_sas, a.I_sas, color = 'red')
+plt.xscale('log')
+plt.yscale('log')

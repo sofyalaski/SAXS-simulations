@@ -23,9 +23,10 @@ test_time_functions = []
 # Initial learning rate
 lr_init         = 1.0e-3
 #Batch size
-batch_size      = 500
+batch_size      = 256
 # Total number of epochs to train for
 n_epochs        = 50
+
 # End the epoch after this many iterations (or when the train loader is exhausted)
 n_its_per_epoch = 200
 # For the first n epochs, train with a much lower learning rate. This can be
@@ -97,9 +98,9 @@ mmd_back_weighted = False
 # Initialize the model parameters from a normal distribution with this sigma
 init_scale = 0.10
 #
-N_blocks   = 4
+N_blocks   = 5
 #
-exponent_clamping = 4.0
+exponent_clamping = 2.0
 #
 hidden_layer_sizes = 128
 #

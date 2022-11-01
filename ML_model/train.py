@@ -56,7 +56,6 @@ def loss_reconstruction(out_y, x):
     return c.lambd_reconstruct * losses.l2_fit(x_reconstructed, x) # needs fix
 
 def train_epoch(i_epoch, test=False):
-
     if not test:
         model.model.train()
         loader = c.train_loader
@@ -64,8 +63,8 @@ def train_epoch(i_epoch, test=False):
     if test:
         model.model.eval()
         loader = c.test_loader
-        nograd = torch.no_grad()
-        nograd.__enter__()
+        #nograd = torch.no_grad()
+        #nograd.__enter__()
 
 
     batch_idx = 0
@@ -75,7 +74,6 @@ def train_epoch(i_epoch, test=False):
 
         if batch_idx > c.n_its_per_epoch:
             break
-
         batch_losses = []
 
         batch_idx += 1
@@ -128,7 +126,7 @@ def train_epoch(i_epoch, test=False):
             for f in c.test_time_functions:
                 f(out_x_class, out_x_features, out_y, x_class,x_features, y)
 
-        nograd.__exit__(None, None, None)
+        #nograd.__exit__(None, None, None)
     return np.mean(loss_history, axis=0)
 
 def main():
