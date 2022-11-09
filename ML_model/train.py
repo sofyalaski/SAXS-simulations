@@ -41,10 +41,13 @@ def loss_forward_mmd(out, y):
 
 def loss_backward_mmd(x_class, x_features, y):
     [x_samples_class, x_samples_features], x_samples_jac = model.model(y, rev=True) 
-    MMD = losses.backward_mmd(x_class, x_samples_class) + losses.backward_mmd(x_features, x_samples_features)
+    MMD_class = losses.backward_mmd(x_class, x_samples_class) 
+    MMD_features = losses.backward_mmd(x_features, x_samples_features)
     if c.mmd_back_weighted:
-        MMD *= torch.exp(- 0.5 / c.y_uncertainty_sigma**2 * losses.l2_dist_matrix(y, y))
-    return c.lambd_mmd_back * torch.mean(MMD)
+        MMD_class *= torch.exp(- 0.5 / c.y_uncertainty_sigma**2 * losses.l2_dist_matrix(y, y))
+        MMD_features *= torch.exp(- 0.5 / c.y_uncertainty_sigma**2 * losses.l2_dist_matrix(y, y))
+    return c.lambd_mmd_back_class * torch.mean(MMD_class)+c.lambd_mmd_back_feature * torch.mean(MMD_features)
+
 
 def loss_reconstruction(out_y, x):
     cat_inputs = [out_y[:, :c.ndim_z] + c.add_z_noise * noise_batch(c.ndim_z)] # list with 1 tensor

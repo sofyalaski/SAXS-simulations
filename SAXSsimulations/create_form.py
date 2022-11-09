@@ -78,14 +78,14 @@ class DensityData:
                     if FT[k,:,:].any():
                         FT_2D = FT[k,:,:].to(device)
                         FT_2D = torch.fft.fft2(FT_2D, norm = 'forward')
-                        print((torch.cuda.memory_allocated()/1024**3), (torch.cuda.memory_cached()/1024**3))
+                        #print((torch.cuda.memory_allocated()/1024**3), (torch.cuda.memory_cached()/1024**3))
                         FT[k,:,:] = FT_2D.cpu()
                         del FT_2D
                 for i in range(FT.shape[1]):
                     for j in range(FT.shape[2]):  
                         FT_1D = FT[:,i,j].to(device)
                         FT_1D = torch.fft.fft(FT_1D, norm = 'forward')
-                        print((torch.cuda.memory_allocated()/1024**3), (torch.cuda.memory_cached()/1024**3))
+                        #print((torch.cuda.memory_allocated()/1024**3), (torch.cuda.memory_cached()/1024**3))
                         FT[:,i,j] = FT_1D.cpu()
                         del FT_1D
                 
@@ -487,7 +487,7 @@ class Simulation(DensityData):
         elif self.shape =='cylinder':
             qMin = float(self.qx[self.qx!=0].min())
             qMax = float(self.qx.max())
-            self.qx_sas = np.linspace(qMin, qMax, num=self.nBins)
+            self.qx_sas = np.linspace(qMin, qMax, num=self.nBins)/10
         self.modelParameters_sas = self.model.info.parameters.defaults.copy()
         if self.shape == 'sphere':
             self.modelParameters_sas.update({
@@ -513,8 +513,8 @@ class Simulation(DensityData):
                 'length_pd_type': 'gaussian', 
                 'length_pd_n': 35,          
                 'theta':90,    
-                'phi':self.theta,
-                'phi_pd': self.rotWidth,
+                'phi':np.mean(self.theta_all),
+                'phi_pd': np.std(self.theta_all),  #self.rotWidth a lot get declined
                 'phi_pd_type':'gaussian',
                 'phi_pd_n':35
                 })
@@ -532,13 +532,9 @@ class Simulation(DensityData):
             q2z = self.qx_sas[:,np.newaxis] + 0* self.qx_sas
             q2y = q2y.reshape(q2y.size)
             q2z = q2z.reshape(q2z.size)
-            print('start creating', q2y.shape)
             self.kernel=self.model.make_kernel([q2y, q2z])
-            print('kernel done')
             self.I_sas = direct_model.call_kernel(self.kernel, self.modelParameters_sas)
-            print('model done')
             self.I_sas = self.I_sas.reshape(self.nBins, self.nBins)
-        self.I_sas += np.random.poisson(self.I_sas) # adding some poison noise
         self.model.release()
 
 

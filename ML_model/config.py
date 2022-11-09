@@ -25,7 +25,7 @@ lr_init         = 1.0e-3
 #Batch size
 batch_size      = 256
 # Total number of epochs to train for
-n_epochs        = 50
+n_epochs        = 25
 
 # End the epoch after this many iterations (or when the train loader is exhausted)
 n_its_per_epoch = 200
@@ -43,13 +43,13 @@ adam_betas = (0.9, 0.95)
 #  Data dimensions  #
 #####################
 ndim_x_class     = 3
+ndim_pad_x_class = 397
 ndim_x_features     = 7
-ndim_pad_x_class = 710
-ndim_pad_x_features = 280
+ndim_pad_x_features = 193
 
 ndim_y     = 512
 ndim_z     = 10
-ndim_pad_zy = 478 
+ndim_pad_zy = 78 
 
 # Overwrite or import data loaders here.
 # See dkfz_train.py for reference.
@@ -69,11 +69,12 @@ train_backward_mmd   = True
 train_reconstruction = False
 train_max_likelihood = False
 
-lambd_fit_forw       = 1.
-lambd_mmd_forw       = 50.
-lambd_reconstruct    = 1.
-lambd_mmd_back       = 500.
-lambd_max_likelihood = 1.
+lambd_fit_forw         = 10.
+lambd_mmd_forw         = 50.
+lambd_reconstruct      = 1.
+lambd_mmd_back_class   = 500.
+lambd_mmd_back_feature = 50.
+lambd_max_likelihood   = 1.
 
 # Both for fitting, and for the reconstruction, perturb y with Gaussian 
 # noise of this sigma
@@ -98,7 +99,7 @@ mmd_back_weighted = False
 # Initialize the model parameters from a normal distribution with this sigma
 init_scale = 0.10
 #
-N_blocks   = 5
+N_blocks   = 10
 #
 exponent_clamping = 2.0
 #
