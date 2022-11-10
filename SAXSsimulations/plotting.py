@@ -163,10 +163,9 @@ def plot_simulation_vs_sas(simulation, uncertainty = 'ISigma'):
         plt.ylabel("I (1/(cm sr))")
         plt.xscale('log') 
         plt.yscale('log') 
-        plt.title(r'$Chi^2$ error: {error}'.format(error = simulation.Chi_squared_norm(uncertainty) ))
+        plt.title(r'$\chi^2$ error: {error}'.format(error = simulation.Chi_squared_norm(uncertainty) ))
         plt.legend()
     else:
-        print(r'$Chi^2$ error: {error}'.format(error = simulation.Chi_squared_norm(uncertainty) ))
         fig,axs = plt.subplots(1,3,figsize = (15,5))
         ax = axs[0]
         binned_FTI = simulation.binned_slice['I'].values.reshape(simulation.nBins, simulation.nBins)
@@ -185,6 +184,7 @@ def plot_simulation_vs_sas(simulation, uncertainty = 'ISigma'):
         plt.xlabel("q (1/nm)")
         plt.ylabel("q (1/nm)")
         plt.title('logged difference')
+        plt.suptitle(r'$\chi^2$ error: {error}'.format(error = simulation.Chi_squared_norm(uncertainty) ))
 
 
 def plt_slices_sum(simulation):

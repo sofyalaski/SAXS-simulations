@@ -3,23 +3,6 @@ import numpy as np
 
 def compute_error(d1, d2):   
     return np.max(np.abs(d1-d2) / np.mean((np.abs(d1), np.abs(d2)), axis=0))
-
-
-def safe_multiplier(*args):
-    product = 1
-    for factor in args:
-        if factor !=0:
-            product *=factor
-    return product 
-
-
-def safe_dividend( *args):
-    fraction = args[0]
-    for factor in args[1:]:
-        if factor !=0:
-            fraction /=factor
-    return fraction 
-
     
 def Intensity_func(scale, simulation):
     if simulation.shape == 'sphere':
@@ -28,14 +11,6 @@ def Intensity_func(scale, simulation):
         else:
             return simulation.binned_data.I.values - simulation.I_sas*scale
     else:
-        return simulation.binned_slice.I - (simulation.I_sas*scale).flatten()
+        values =  simulation.binned_slice.I - (simulation.I_sas*scale).flatten()
+        return values[~np.isnan(values)]
 
-def solve_quadratic_eq_positive(a,b,c):
-    sol1 = (-b +np.sqrt(b**2-4*a*c))/(2*a)
-    sol2 = (-b -np.sqrt(b**2-4*a*c))/(2*a)
-    solutions = []
-    if sol1 >0:
-        solutions.append(sol1)
-    if sol2 > 0:
-        solutions.append(sol2)
-    return solutions

@@ -519,6 +519,12 @@ class Simulation(DensityData):
                 'phi_pd_n':35
                 })
         self.__create_sas_model()
+        # mask edges end center
+        self.I_sas[0, :] = np.nan
+        self.I_sas[-1,:] = np.nan
+        self.I_sas[ :,0] = np.nan
+        self.I_sas[:,-1] = np.nan
+        self.I_sas[self.nBins//2-1:self.nBins//2+2,self.nBins//2-1:self.nBins//2+2] = np.nan
                 
     def __create_sas_model(self):
         """
