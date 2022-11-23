@@ -21,6 +21,10 @@ def subnet1(dims_in, dims_out):
 
 input1 = Ff.InputNode(c.ndim_x_class + c.ndim_pad_x_class, name='input_class')
 input2 = Ff.InputNode(c.ndim_x_features + c.ndim_pad_x_features, name='input_features')
+
+shape_condition = Ff.ConditionNode(c.ndim_x_class, name='input_class')
+
+#model1
 nodes = [input1]
 for i in range(c.N_blocks):
     nodes.append(Ff.Node([nodes[-1].out0],Fm.IResNetLayer, {'internal_size':c.hidden_layer_sizes, 
@@ -48,6 +52,39 @@ for i in range(c.N_blocks):
                                                 'spectral_norm_max':0.8,
                                                 }, name='ires_concat_'+str(i)))
     nodes.append(Ff.Node([nodes[-1].out0], Fm.PermuteRandom, {'seed':c.N_blocks+i}, name='class_permute_'+str(c.N_blocks+i)))
+nodes.append(Ff.OutputNode([nodes[-1].out0], name='output'))
+model = Ff.GraphINN(nodes, verbose=c.verbose_construction)
+      
+model.to(c.device)
+
+#model2
+
+nodes = [input1]
+nodes.append(shape_condition)
+nodes.append(Ff.Node(nodes[-2].out0, Fm.RNVPCouplingBlock, {'subnet_constructor':subnet2, 'clamp':c.exponent_clamping},conditions = nodes[-1], name = 'coupling_conditioned'))
+if c.use_permutation:
+    nodes.append(Ff.Node([nodes[-1].out0], Fm.PermuteRandom, {'seed':100}, name='permute_middle'))
+
+for i in range(c.N_blocks):
+    nodes.append(Ff.Node(nodes[-1].out0, Fm.RNVPCouplingBlock, {'subnet_constructor':subnet1, 'clamp':c.exponent_clamping}, name = 'coupling_{}'.format(i)))
+    if c.use_permutation:
+        nodes.append(Ff.Node([nodes[-1].out0], Fm.PermuteRandom, {'seed':i}, name='permute_{}'.format(i)))
+
+nodes.append(Ff.Node(nodes[-1].out0, Fm.RNVPCouplingBlock, {'subnet_constructor':subnet2, 'clamp':c.exponent_clamping},conditions = nodes[-1-(c.N_blocks+1)*2], name = 'coupling_conditioned'))
+if c.use_permutation:
+    nodes.append(Ff.Node([nodes[-1].out0], Fm.PermuteRandom, {'seed':100}, name='permute_middle'))
+
+nodes.append(Ff.Node(nodes[-1].out0, Fm.RNVPCouplingBlock, {'subnet_constructor':subnet2, 'clamp':c.exponent_clamping},conditions = nodes[-1-(c.N_blocks+2)*2], name = 'coupling_conditioned'))
+if c.use_permutation:
+    nodes.append(Ff.Node([nodes[-1].out0], Fm.PermuteRandom, {'seed':100}, name='permute_middle'))
+
+nodes.append(input2)
+nodes.append( Ff.Node([nodes[-2].out0, nodes[-1].out0], Fm.Concat, {}, name='Concat'))
+for i in range(c.N_blocks):
+    nodes.append(Ff.Node(nodes[-1].out0, Fm.RNVPCouplingBlock, {'subnet_constructor':subnet2, 'clamp':c.exponent_clamping}, name = 'coupling_{}'.format(i)))
+    if c.use_permutation:
+        nodes.append(Ff.Node([nodes[-1].out0], Fm.PermuteRandom, {'seed':i}, name='permute_{}'.format(i)))
+
 nodes.append(Ff.OutputNode([nodes[-1].out0], name='output'))
 model = Ff.GraphINN(nodes, verbose=c.verbose_construction)
       

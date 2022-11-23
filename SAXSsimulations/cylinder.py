@@ -130,9 +130,9 @@ class Cylinder(Simulation):
                 center[2]+np.cos(np.deg2rad(theta))*height]
         # check the points where the potential cylinder will take place - we need a meshgrid
         # to not check the whole box, we will only be checking in between the cylinder ends + radius at slice(for x,y) or capping (for z) plus some extra few points for safety
-        grid_x = self.grid[(self.grid>=min(cylinder_end[0], center[0])-radius*np.cos(np.deg2rad(theta))- 20*self.grid_space ) & (self.grid<=max(cylinder_end[0], center[0])+radius*np.cos(np.deg2rad(theta))+ 20*self.grid_space) ]
-        grid_y = self.grid[(self.grid>=min(cylinder_end[1], center[1])-radius*np.cos(np.deg2rad(theta))- 20*self.grid_space ) & (self.grid<=max(cylinder_end[1], center[1])+radius*np.cos(np.deg2rad(theta))+ 20*self.grid_space) ]
-        grid_z = self.grid[(self.grid>=min(cylinder_end[2], center[2])-radius*np.tan(np.deg2rad(theta))- 20*self.grid_space ) & (self.grid<=max(cylinder_end[2], center[2])+radius*np.tan(np.deg2rad(theta))+ 20*self.grid_space) ] 
+        grid_x = self.grid[(self.grid>=min(cylinder_end[0], center[0])-radius/np.cos(np.deg2rad(theta))- 2*self.grid_space ) & (self.grid<=max(cylinder_end[0], center[0])+radius/np.cos(np.deg2rad(theta))+ 2*self.grid_space) ]
+        grid_y = self.grid[(self.grid>=min(cylinder_end[1], center[1])-radius/np.cos(np.deg2rad(theta))- 2*self.grid_space ) & (self.grid<=max(cylinder_end[1], center[1])+radius/np.cos(np.deg2rad(theta))+ 2*self.grid_space) ]
+        grid_z = self.grid[(self.grid>=min(cylinder_end[2], center[2])-radius*np.tan(np.deg2rad(theta))- 2*self.grid_space ) & (self.grid<=max(cylinder_end[2], center[2])+radius*np.tan(np.deg2rad(theta))+ 2*self.grid_space) ] 
         coords = np.array(np.meshgrid(grid_x, grid_y, grid_z))
 
         #coords = np.array(np.meshgrid(self.grid, self.grid, self.grid))

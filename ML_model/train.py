@@ -39,8 +39,8 @@ def loss_forward_mmd(out, y):
 
     return l_forw_fit, l_forw_mmd
 
-def loss_backward_mmd(x_class, x_features, y):
-    [x_samples_class, x_samples_features], x_samples_jac = model.model(y, rev=True) 
+def loss_backward_mmd(x_class, x_features, y, x_cond):
+    [x_samples_class, x_samples_features], x_samples_jac = model.model(y, rev=True, jac = False,c= x_cond) 
     MMD_class = losses.backward_mmd(x_class, x_samples_class) 
     MMD_features = losses.backward_mmd(x_features, x_samples_features)
     if c.mmd_back_weighted:
@@ -49,13 +49,13 @@ def loss_backward_mmd(x_class, x_features, y):
     return c.lambd_mmd_back_class * torch.mean(MMD_class)+c.lambd_mmd_back_feature * torch.mean(MMD_features)
 
 
-def loss_reconstruction(out_y, x):
+def loss_reconstruction(out_y, x, x_cond):
     cat_inputs = [out_y[:, :c.ndim_z] + c.add_z_noise * noise_batch(c.ndim_z)] # list with 1 tensor
     
     if c.ndim_pad_zy:
         cat_inputs.append(out_y[:, c.ndim_z:-c.ndim_y] + c.add_pad_noise * noise_batch(c.ndim_pad_zy)) # list with 2 tensor
     cat_inputs.append(out_y[:, -c.ndim_y:] + c.add_y_noise * noise_batch(c.ndim_y)) # list with 3 tensors
-    x_reconstructed_class, x_reconstructed_features, x_reconstructed_jac = model.model(torch.cat(cat_inputs, 1), rev=True) # concatenate list elements along axis 1
+    x_reconstructed_class, x_reconstructed_features, x_reconstructed_jac = model.model(torch.cat(cat_inputs, 1), rev=True,c= x_cond) # concatenate list elements along axis 1
     return c.lambd_reconstruct * losses.l2_fit(x_reconstructed, x) # needs fix
 
 def train_epoch(i_epoch, test=False):
@@ -66,8 +66,8 @@ def train_epoch(i_epoch, test=False):
     if test:
         model.model.eval()
         loader = c.test_loader
-        #nograd = torch.no_grad()
-        #nograd.__enter__()
+        nograd = torch.no_grad()
+        nograd.__enter__()
 
 
     batch_idx = 0
@@ -86,20 +86,20 @@ def train_epoch(i_epoch, test=False):
 
         if c.add_y_noise > 0:
             y += c.add_y_noise * noise_batch(c.ndim_y)
-
+        x_cond = x[:,-3:]
         if c.ndim_pad_x_class:
             # x = [x, pad_x]
             x_class = torch.cat((x[:,:3], c.add_pad_noise * noise_batch(c.ndim_pad_x_class)), dim=1)
         
         if c.ndim_pad_x_features:
             # x = [x, pad_x]
-            x_features = torch.cat((x[:,3:], c.add_pad_noise * noise_batch(c.ndim_pad_x_features)), dim=1)
+            x_features = torch.cat((x[:,3:-3], c.add_pad_noise * noise_batch(c.ndim_pad_x_features)), dim=1)
         if c.ndim_pad_zy:
             y = torch.cat((c.add_pad_noise * noise_batch(c.ndim_pad_zy), y), dim=1)
         # y = [z, pad_yz, y]
         y = torch.cat((noise_batch(c.ndim_z), y), dim=1)
 
-        out_y, out_y_jac = model.model([x_class,x_features])
+        out_y, out_y_jac = model.model([x_class,x_features], jac  = False, c= x_cond)
         # tuple with output[0] and jacobian[1]
         if c.train_max_likelihood:
             batch_losses.append(loss_max_likelihood(out_y, y))
@@ -108,10 +108,10 @@ def train_epoch(i_epoch, test=False):
             batch_losses.extend(loss_forward_mmd(out_y, y))
 
         if c.train_backward_mmd:
-            batch_losses.append(loss_backward_mmd(x_class,x_features, y))
+            batch_losses.append(loss_backward_mmd(x_class,x_features, y, x_cond))
 
         if c.train_reconstruction:
-            batch_losses.append(loss_reconstruction(out_y.data, x))
+            batch_losses.append(loss_reconstruction(out_y.data, x, x_cond))
 
         l_total = sum(batch_losses)
         loss_history.append([l.item() for l in batch_losses]) # lisr of lists: list for each batch
@@ -123,13 +123,12 @@ def train_epoch(i_epoch, test=False):
     if test:
         monitoring.show_hist(out_y[:, :c.ndim_z])
         monitoring.show_cov(out_y[:, :c.ndim_z])
-
         if c.test_time_functions:
-            out_x_class, out_x_features, out_x_jac = model.model(y, rev=True) 
+            out_x_class, out_x_features, out_x_jac = model.model(y, rev=True, jac = False,c= x_cond) 
             for f in c.test_time_functions:
                 f(out_x_class, out_x_features, out_y, x_class,x_features, y)
 
-        #nograd.__exit__(None, None, None)
+        nograd.__exit__(None, None, None)
     return np.mean(loss_history, axis=0)
 
 def main():

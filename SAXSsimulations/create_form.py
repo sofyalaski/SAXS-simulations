@@ -513,8 +513,8 @@ class Simulation(DensityData):
                 'length_pd_type': 'gaussian', 
                 'length_pd_n': 35,          
                 'theta':90,    
-                'phi':np.mean(self.theta_all),
-                'phi_pd': np.std(self.theta_all),  #self.rotWidth a lot get declined
+                'phi':0,
+                'phi_pd': self.theta,  #self.rotWidth a lot get declined
                 'phi_pd_type':'gaussian',
                 'phi_pd_n':35
                 })

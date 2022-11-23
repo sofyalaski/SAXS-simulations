@@ -90,7 +90,7 @@ y_uncertainty_sigma = 0.12 * 4
 
 mmd_forw_kernels = [(0.2, 2), (1.5, 2), (3.0, 2)]
 mmd_back_kernels = [(0.2, 0.1), (0.2, 0.5), (0.2, 2)]
-mmd_back_weighted = False
+mmd_back_weighted = True
 
 ###########
 #  Model  #
@@ -99,11 +99,11 @@ mmd_back_weighted = False
 # Initialize the model parameters from a normal distribution with this sigma
 init_scale = 0.10
 #
-N_blocks   = 10
+N_blocks   = 5
 #
-exponent_clamping = 2.0
+exponent_clamping = 3.0
 #
-hidden_layer_sizes = 128
+hidden_layer_sizes = 16
 #
 use_permutation = True
 #
