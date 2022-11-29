@@ -154,6 +154,7 @@ def plot_simulation_vs_sas(simulation, uncertainty = 'ISigma'):
         uncertainty: The value to plot as uncertainty
     """
     if simulation.shape == 'sphere':
+        print("relative error: {:.2f}".format(compute_error(simulation.I_sas, simulation.binned_slice.I.values)))
         plt.plot(simulation.qx_sas, simulation.I_sas, '-', color = 'red', label = 'SasView')
         if 'binned_slice' in dir(simulation):
             plt.plot(simulation.binned_slice.Q, simulation.binned_slice.I, color = 'blue', label = 'Simulation')
@@ -166,6 +167,7 @@ def plot_simulation_vs_sas(simulation, uncertainty = 'ISigma'):
         plt.title(r'$\chi^2$ error: {error}'.format(error = simulation.Chi_squared_norm(uncertainty) ))
         plt.legend()
     else:
+        print("relative error: {:.2f}".format(compute_error(simulation.I_sas, simulation.binned_slice.I.values.reshape(simulation.nBins, simulation.nBins))))
         fig,axs = plt.subplots(1,3,figsize = (15,5))
         ax = axs[0]
         binned_FTI = simulation.binned_slice['I'].values.reshape(simulation.nBins, simulation.nBins)
@@ -179,7 +181,7 @@ def plot_simulation_vs_sas(simulation, uncertainty = 'ISigma'):
         plt.ylabel("q (1/nm)")
         plt.title('SasModels simulation')
         ax = axs[2]
-        im = ax.imshow(binned_FTI-simulation.I_sas , extent = [simulation.qx.min(), simulation.qx.max(), simulation.qx.min(), simulation.qx.max()] )
+        im = ax.imshow(np.log(np.abs(binned_FTI-simulation.I_sas)) , extent = [simulation.qx.min(), simulation.qx.max(), simulation.qx.min(), simulation.qx.max()] )
         plt.colorbar(im)
         plt.xlabel("q (1/nm)")
         plt.ylabel("q (1/nm)")

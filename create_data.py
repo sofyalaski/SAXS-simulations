@@ -94,7 +94,6 @@ class Hdf:
                                 'background':0., 
                                 'sld':1.,
                                 'sld_solvent':0.,
-                                #'theta': self.theta,
                                 'radius_pd': self.radius_polydispersity,
                                 'radius_pd_type': 'gaussian', 
                                 'radius_pd_n': 35,
@@ -102,10 +101,6 @@ class Hdf:
                                 'length_pd': self.length_polydispersity,
                                 'length_pd_type':'gaussian',
                                 'length_pd_n':35,
-                                #'phi':self.phi,
-                                #'phi_pd': self.phi_pd,
-                                #'phi_pd_type': self.phi_distr,
-                                #'phi_pd_n':10
             }
 
 
@@ -140,20 +135,15 @@ if __name__ == '__main__':
     for i in range(1,5001):
         if i%100==0:
             print(i/5000*100,'%')
-        Hdf(f'{i:04}', '/home/slaskina/simulations/','cylinder')
+        Hdf(f'{i:05}', '/home/slaskina/simulations/','cylinder', 512, False)
     for i in range(1,5001):
         if i%100==0:
             print(i/5000*100,'%')
-        Hdf(f'{50+i:04}', '/home/slaskina/simulations/','sphere')
+        Hdf(f'{5000+i:05}', '/home/slaskina/simulations/','sphere', 512, False)
     for i in range(1,5001):
         volfraction = np.arange(0,0.31, 0.05)
         if i%100==0:
             print(i/5000*100,'%')
-        Hdf(f'{50+i:04}', '/home/slaskina/simulations/','hardsphere', volfraction[i%len(volfraction)])
+        Hdf(f'{10000+i:05}', '/home/slaskina/simulations/','hardsphere', 512, False, volfraction[i%len(volfraction)])
 
 
-print(a.parameters_dict['radius'],a.parameters_dict['radius_pd'])
-plt.plot(a.qx_sas, a.I_noisy)
-plt.plot(a.qx_sas, a.I_sas, color = 'red')
-plt.xscale('log')
-plt.yscale('log')

@@ -140,29 +140,33 @@ class DensityData:
     ################################   The Fourier Transformation functions   ################################
 
 
-    def mask_FT_to_sphere(self, instance):
+    def mask_FT_to_sphere(self, instance, box_bins = None, fill_value = None):
         """
         The averaging in rebinning function is based on the angles present in the scattering angles Q matrix.The values in the matrix
         have circular symmetry and the values in the corners of the matrix are underrepresented and will not be considered in the rebinning.
         """
-        
-        x2x = self.grid[None,:]
-        x2y = self.grid[:,None]
-        radius = self.nPoints/2
+                
+        if box_bins is None:
+            radius = self.nPoints/2
+            x2x = self.grid[None,:]
+            x2y = self.grid[:,None]
+        else:
+            radius = box_bins/2
+            grid = np.arange( box_bins)
+            x2x = grid[None,:]
+            x2y = grid[:,None]
+        if fill_value is None:
+            fill_value =  np.nan
         if len(instance.shape)==2:
-            
             x2x,x2y  = np.ogrid[:instance.shape[0], :instance.shape[1]]
             center = (int(instance.shape[0]//2+1), int(instance.shape[1]//2+1))
-            radius = self.nPoints/2
             mask = torch.from_numpy((x2x-center[0])**2 + (x2y-center[1])**2 < radius**2) # center = 0
-            return torch.where(mask, instance, np.nan)
-
+            return torch.where(mask, instance, fill_value)
         else:
             mask = DensityData()
             mask.set_density(torch.zeros_like(instance))
             x2y,x2z  = np.ogrid[:instance.shape[1], :instance.shape[2]]
             center = (int(instance.shape[0]//2+1), int(instance.shape[1]//2+1), int(instance.shape[2]//2+1))
-            radius = self.nPoints//2# last grid point fully covering the radius is considered , sphere is symmetric so work in both directions
             if len(mask.grid[mask.grid == 0])==1:
                 for i in range(radius): 
                     d = mask.grid_space*i # calculate the distance grom the center to the slice
@@ -170,7 +174,7 @@ class DensityData:
                     circle_at_d = (x2y-center[1])**2 + (x2z-center[2])**2 < radius_at_d**2 # mask the circle location
                     mask.density[center[0]+i,circle_at_d] = 1
                     mask.density[center[0]-i,circle_at_d] = 1
-            return torch.where(mask.density.type(torch.bool),instance, np.nan)
+            return torch.where(mask.density.type(torch.bool),instance, fill_value)
 
 
 
@@ -483,7 +487,7 @@ class Simulation(DensityData):
         
         if self.shape == 'sphere':
             self.qx_sas = self.binned_slice['Q'].values if 'binned_slice' in dir(self) else (self.binned_data['Q'].values)
-            self.Q_sas = np.array(self.qx_sas[np.newaxis, :])
+            self.Q_sas = np.array(self.qx_sas[np.newaxis, :])/10
         elif self.shape =='cylinder':
             qMin = float(self.qx[self.qx!=0].min())
             qMax = float(self.qx.max())
@@ -491,7 +495,7 @@ class Simulation(DensityData):
         self.modelParameters_sas = self.model.info.parameters.defaults.copy()
         if self.shape == 'sphere':
             self.modelParameters_sas.update({
-                'radius': self.rMean, 
+                'radius': self.rMean*10, 
                 'background':0., 
                 'sld':1.,
                 'sld_solvent':0.,
@@ -500,6 +504,8 @@ class Simulation(DensityData):
                 'radius_pd_n': 35
                 })
         elif self.shape =='cylinder':
+            r = np.array(self.theta_all)
+
             self.modelParameters_sas.update({
                 'radius': self.rMean*10, 
                 'background':0., 
@@ -513,19 +519,27 @@ class Simulation(DensityData):
                 'length_pd_type': 'gaussian', 
                 'length_pd_n': 35,          
                 'theta':90,    
-                'phi':0,
-                'phi_pd': self.theta,  #self.rotWidth a lot get declined
-                'phi_pd_type':'gaussian',
+                'phi': 0,
+                'phi_pd': self.theta, #self.thetaWidth,  
+                'phi_pd_type':'uniform',
                 'phi_pd_n':35
                 })
         self.__create_sas_model()
         # mask edges end center
-        self.I_sas[0, :] = np.nan
-        self.I_sas[-1,:] = np.nan
-        self.I_sas[ :,0] = np.nan
-        self.I_sas[:,-1] = np.nan
-        self.I_sas[self.nBins//2-1:self.nBins//2+2,self.nBins//2-1:self.nBins//2+2] = np.nan
-                
+        if self.shape =='cylinder':
+            self.__mask_2d_pattern()
+
+    def __mask_2d_pattern(self):    
+        """
+        Mask the edges and the central circle of both simulations.
+        """    
+        q2x = np.arange(self.nBins) + 0* np.arange(self.nBins)[:,np.newaxis]
+        q2y = np.arange(self.nBins)[:,np.newaxis] + 0* np.arange(self.nBins)
+        mask = (q2x-self.nBins//2+1)**2 + (q2y-self.nBins//2+1)**2 > np.round(self.nBins/50)**2 # on the right side is the radius of sphere(in pixel) to mask in center 1% of box size 
+        mask = self.mask_FT_to_sphere(torch.from_numpy(mask),box_bins =  self.nBins, fill_value=False).numpy()
+        self.I_sas = np.where(mask, self.I_sas, np.nan)
+        self.binned_slice["I"] = np.where(mask, self.binned_slice.I.values.reshape(self.nBins, self.nBins), np.nan).flatten()
+
     def __create_sas_model(self):
         """
         The core SasModel function to create a simulation. creates a kernel for scatterig angles represented in the simulation before.
@@ -550,6 +564,9 @@ class Simulation(DensityData):
         """
         self.modelParameters_sas.update({'scale':value})
         self.__create_sas_model()
+        # mask edges end center
+        if self.shape =='cylinder':
+            self.__mask_2d_pattern()
     
 
     def Chi_squared_norm(self, uncertainty):

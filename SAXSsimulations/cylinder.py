@@ -21,7 +21,7 @@ class Cylinder(Simulation):
         self.phi = None
         self.center = None  
         self.shape = 'cylinder'
-        self.rotWidth = 5 # VARIATION IS 5 DEGREES
+        self.thetaWidth = 5
         self.shapes=0
 
     def place_shape(self, single = False, **kwargs):
@@ -96,7 +96,7 @@ class Cylinder(Simulation):
                 while success == False:
                     height = np.random.normal(loc = self.hMean, scale= self.hWidth)
                     radius = np.random.normal(loc = self.rMean, scale= self.rWidth )
-                    theta = int(np.random.normal(loc = self.theta, scale= self.rotWidth ) )
+                    theta = int(np.random.normal(loc = self.theta, scale= self.thetaWidth ) )
                     phi = int(np.random.uniform(low = 0, high = 360))
                     center = np.zeros(3)
                     center[0:2] = np.random.uniform(low = -self.box_size/2, high = self.box_size/2, size = 2)
@@ -111,7 +111,7 @@ class Cylinder(Simulation):
                         self.phi_all.append(phi)
                         self.theta_all.append(theta)
                         print('volume fraction is {vf:.5f}, height is {h:.3f}, radius is {r:.3f}, center at ({cx:.1f},{cy:.1f},{cz:.1f}), rotation phi is {phi}, rotation theta is {theta} '
-                        .format(vf = self.volume_fraction, h = height, r = radius, cx=center[0], cy = center[1], cz = center[2], phi = phi, theta = theta))
+                        .format(vf = self.volume_fraction, h = height, r = radius, cx=center[0], cy = center[1], cz = center[2], phi = phi, theta = theta), end = '\r')
                     attempt+=1
 
 
