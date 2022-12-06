@@ -16,6 +16,7 @@ class Sphere(Simulation):
         super(Sphere, self).__init__(size, nPoints, volFrac)
         self.shapes = 0
         self.declined_shapes=0
+        self.volfraction = volFrac
 
     def place_shape(self, single = False, nonoverlapping = False, **kwargs):
         """
@@ -28,7 +29,7 @@ class Sphere(Simulation):
             self.rWidth = 0.1
         if self.volume_fraction_threshold != 0:
             self.__sphere_in_box(single, nonoverlapping)
-         
+        self.hardsphere = nonoverlapping
 
     def __sphere_in_box(self, single, nonoverlapping):
         """

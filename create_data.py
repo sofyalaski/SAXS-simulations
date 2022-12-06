@@ -1,4 +1,4 @@
-#!/home/slaskina/.conda/envs/fft/bin/python
+#!/home/slaskina/.conda/envs/ma/bin/python
 import pyopencl as cl
 cl.create_some_context()
 import numpy as np
