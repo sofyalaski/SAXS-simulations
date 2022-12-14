@@ -6,24 +6,6 @@ from sklearn.metrics import mean_squared_error
 import matplotlib.gridspec as gridspec
 
 
-
-
-def create_table_from_outcome(pred, sampled_inputs):
-    df = pd.DataFrame(columns = ['true_shape', 'pred_shape', 'radius','pred_radius'], index = [])
-    df['true_shape'] = sampled_inputs[:,:3].argmax(axis=1)
-    df['pred_shape'] = pred[:,:3].argmax(axis=1)
-    df['radius'] = np.take_along_axis(sampled_inputs[:,3:6],df.true_shape.values.reshape(-1,1), axis=1)
-    df['pred_radius'] = np.take_along_axis(pred[:,3:6],df.pred_shape.values.reshape(-1,1), axis=1)
-    df['radius_pd'] = sampled_inputs[:,6]
-    df['pred_radius_pd'] = pred[:,6]
-    df['length'] = sampled_inputs[:,7]
-    df['pred_length'] = pred[:,7] # only those identified as cylinder should have lengh and pd_length  df.pred_shape.values ==2, pred[:,7], 0) 
-    df['length_pd'] = sampled_inputs[:,8]
-    df['pred_length_pd'] =  pred[:,8]
-    df['volfraction'] = sampled_inputs[:,9]
-    df['pred_volfraction'] = pred[:,9]
-    return df
-
 def MSE(sampled, predicted):
     if len(sampled) == 0:
         return np.inf
@@ -125,7 +107,7 @@ def plot_outcomes_identified(df, data_name):
     ax.get_legend().remove()
     ax.text(-.4, 4.2, "sampled")
     ax.text(0.2, 4.2, "predicted")
-    ax.set_ylim([-.5,6])
+    #ax.set_ylim([-.5,6])
 
     ax = axes[1,1]
     data = df_stacked[((df_stacked.feature == 'length_pd')&(df_stacked.true_shape ==2))|((df_stacked.feature == 'pred_length_pd')&(df_stacked.pred_shape == 2))]
@@ -139,7 +121,7 @@ def plot_outcomes_identified(df, data_name):
     ax.get_legend().remove()
     ax.text(-.4, 0.25, "sampled")
     ax.text(0.2, 0.25, "predicted")
-    ax.set_ylim([-0.05, 0.35])
+    #ax.set_ylim([-0.05, 0.35])
 
     ax = axes[1,2]
     data = df_stacked[((df_stacked.feature == 'volfraction')&(df_stacked.true_shape ==1))|((df_stacked.feature == 'pred_volfraction')&(df_stacked.pred_shape == 1))]
@@ -153,7 +135,7 @@ def plot_outcomes_identified(df, data_name):
     ax.get_legend().remove()
     ax.text(-.4, 0.5, "sampled")
     ax.text(0.2, 0.5, "predicted")
-    ax.set_ylim([-0.1, 0.7])
+    #ax.set_ylim([-0.1, 0.7])
 
     plt.suptitle('{d} Data'.format(d = data_name))
     
@@ -225,7 +207,7 @@ def describe_false_shapes(false_spheres, false_hardspheres, false_cylinders):
     ax3.get_legend().remove()
     ax3.text(-.4, 4.2, "FN")
     ax3.text(0.2, 4.2, "FP")
-    ax3.set_ylim([-.5,6])
+    #ax3.set_ylim([-.5,6])
 
     ax4 = plt.subplot(gs[1, 2:4])
     
@@ -241,7 +223,7 @@ def describe_false_shapes(false_spheres, false_hardspheres, false_cylinders):
     ax4.get_legend().remove()
     ax4.text(-.4, 0.25, "FN")
     ax4.text(0.2, 0.25, "FP")
-    ax4.set_ylim([-0.05, 0.35])
+    #ax4.set_ylim([-0.05, 0.35])
 
     ax5 = plt.subplot(gs[1, 4:6])
     false_hardspheres['value'] = false_hardspheres.apply(set_value, args = ( 1, 'volfraction', 'pred_volfraction'), axis=1)
@@ -257,7 +239,7 @@ def describe_false_shapes(false_spheres, false_hardspheres, false_cylinders):
     ax5.get_legend().remove()
     ax5.text(-.4, 0.5, "FN")
     ax5.text(0.2, 0.5, "FP")
-    ax5.set_ylim([-0.1, 0.7])
+    #ax5.set_ylim([-0.1, 0.7])
 
     plt.suptitle('Parameter distributions for unidentified shapes')
     
@@ -334,7 +316,7 @@ def describe_positive_shapes(df_test):
     ax3.get_legend().remove()
     ax3.text(-.4, 4.2, "FN")
     ax3.text(0.2, 4.2, "FP")
-    ax3.set_ylim([-.5,6])
+    #ax3.set_ylim([-.5,6])
 
 
 
@@ -352,7 +334,7 @@ def describe_positive_shapes(df_test):
     ax4.get_legend().remove()
     ax4.text(-.4, 0.25, "FN")
     ax4.text(0.2, 0.25, "FP")
-    ax4.set_ylim([-0.05, 0.35])
+    #ax4.set_ylim([-0.05, 0.35])
 
 
     hardspheres = df_test[df_test.pred_shape==1].copy()
@@ -369,7 +351,7 @@ def describe_positive_shapes(df_test):
     ax5.get_legend().remove()
     ax5.text(-.4, 0.5, "FN")
     ax5.text(0.2, 0.5, "FP")
-    ax5.set_ylim([-0.1, 0.7])
+    #ax5.set_ylim([-0.1, 0.7])
 
     plt.suptitle('Parameter distribution for shapes')
     

@@ -4,9 +4,8 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 import matplotlib.pyplot as plt
 
-import config as c
 
-def MMD_matrix_multiscale(x, y, widths_exponents):
+def MMD_matrix_multiscale(x, y, widths_exponents, device):
     xx, yy, xy = torch.mm(x,x.t()), torch.mm(y,y.t()), torch.mm(x,y.t())
 
     rx = (xx.diag().unsqueeze(0).expand_as(xx))
@@ -16,9 +15,9 @@ def MMD_matrix_multiscale(x, y, widths_exponents):
     dyy = torch.clamp(ry.t() + ry - 2.*yy, 0, np.inf)
     dxy = torch.clamp(rx.t() + ry - 2.*xy, 0, np.inf)
 
-    XX, YY, XY = (torch.zeros(xx.shape).to(c.device),
-                  torch.zeros(xx.shape).to(c.device),
-                  torch.zeros(xx.shape).to(c.device))
+    XX, YY, XY = (torch.zeros(xx.shape).to(device),
+                  torch.zeros(xx.shape).to(device),
+                  torch.zeros(xx.shape).to(device))
 
     for C,a in widths_exponents:
         XX += C**a * ((C + dxx) / a)**-a
@@ -35,14 +34,14 @@ def l2_dist_matrix(x, y):
 
     return torch.clamp(rx.t() + ry - 2.*xy, 0, np.inf)
 
-def forward_mmd(y0, y1):
-    return MMD_matrix_multiscale(y0, y1, c.mmd_forw_kernels)
+def forward_mmd(y0, y1, mmd_forw_kernels, device):
+    return MMD_matrix_multiscale(y0, y1, mmd_forw_kernels, device)
 
-def backward_mmd(x0, x1):
-    return MMD_matrix_multiscale(x0, x1, c.mmd_back_kernels)
+def backward_mmd(x0, x1, mmd_back_kernels, device):
+    return MMD_matrix_multiscale(x0, x1, mmd_back_kernels, device)
 
-def l2_fit(input, target):
-    return torch.sum((input - target)**2) / c.batch_size
+def l2_fit(input, target, batch_size):
+    return torch.sum((input - target)**2) / batch_size
 
 def debug_mmd_terms(XX, YY, XY):
 

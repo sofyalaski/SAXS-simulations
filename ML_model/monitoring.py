@@ -1,21 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-import config as c
 
-def print_config():
-    config_str = ""
-    config_str += "="*80 + "\n"
-    config_str += "Config options:\n\n"
-
-    for v in dir(c):
-        if v[0]=='_': continue
-        s=eval('c.%s'%(v))
-        config_str += "  {:25}\t{}\n".format(v,s)
-
-    config_str += "="*80 + "\n"
-
-    print(config_str)
 
 class Visualizer:
     def __init__(self, loss_labels):
@@ -48,6 +34,43 @@ class Visualizer:
     def update_hist(self, *args):
         pass
 
+
+visualizer = None
+
+def restart():
+    global visualizer
+    loss_labels = []
+
+    #loss_labels.append('L_ML')
+    loss_labels += ['L_fit', 'L_mmd_fwd']
+    loss_labels.append('L_mmd_back')
+    loss_labels.append('L_reconst')
+
+    loss_labels += [l + '(test)' for l in loss_labels]
+
+    #visualizer = LiveVisualizer(loss_labels)
+    visualizer = Visualizer(loss_labels)
+
+def show_loss(losses, logscale=True):
+    visualizer.update_losses(losses, logscale)
+
+def show_imgs(*imgs):
+    visualizer.update_images(*imgs)
+
+def show_hist(data):
+    visualizer.update_hist(data.data.cpu())
+
+def show_cov(data):
+    #visualizer.update_cov(data.data.cpu())
+    pass
+
+def close():
+    visualizer.close()
+
+
+    """
+    
+    
 class LiveVisualizer(Visualizer):
     def __init__(self, loss_labels):
         super().__init__(loss_labels)
@@ -102,43 +125,4 @@ class LiveVisualizer(Visualizer):
         self.viz.close(win=self.hist)
         self.viz.close(win=self.imgs)
         self.viz.close(win=self.l_plots)
-
-visualizer = None
-
-def restart():
-    global visualizer
-    loss_labels = []
-
-    if c.train_max_likelihood:
-        loss_labels.append('L_ML')
-    if c.train_forward_mmd:
-        loss_labels += ['L_fit', 'L_mmd_fwd']
-    if c.train_backward_mmd:
-        loss_labels.append('L_mmd_back')
-    if c.train_reconstruction:
-        loss_labels.append('L_reconst')
-
-    loss_labels += [l + '(test)' for l in loss_labels]
-
-    if c.interactive_visualization:
-        visualizer = LiveVisualizer(loss_labels)
-    else:
-        visualizer = Visualizer(loss_labels)
-
-def show_loss(losses, logscale=True):
-    visualizer.update_losses(losses, logscale)
-
-def show_imgs(*imgs):
-    visualizer.update_images(*imgs)
-
-def show_hist(data):
-    visualizer.update_hist(data.data.cpu())
-
-def show_cov(data):
-    if c.interactive_visualization:
-        visualizer.update_cov(data.data.cpu())
-    else:
-        pass
-
-def close():
-    visualizer.close()
+    """

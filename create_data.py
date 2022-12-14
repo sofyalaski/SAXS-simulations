@@ -25,7 +25,7 @@ class Hdf:
         """
         with h5py.File(self.outputFile, "w") as f:
             entry = f.create_group("entry")
-            q = entry.create_dataset("qx", data=self.qx_sas, dtype='f')
+            q = entry.create_dataset("qx", data=self.qx_sas*10, dtype='f')
             q.attrs['units'] = 'nm-1'
             I = entry.create_dataset("I", data=self.I_sas, dtype='f')
             I.attrs['units'] = 'm-1 sr-1'
@@ -46,20 +46,23 @@ class Hdf:
             radius_pd_n = properties.create_dataset('radius_pd_n',data = self.parameters_dict['radius_pd_n'], dtype='f')'''
 
             for key in self.parameters_dict:
-                properties.create_dataset(key, data = self.parameters_dict[key])
+                if key in ['radius', 'length']:
+                    properties.create_dataset(key, data = self.parameters_dict[key]/10)
+                else:
+                    properties.create_dataset(key, data = self.parameters_dict[key])
 
     def __create_parameters(self, *args):
         """ samples parameters"""
-        self.size = 10
+        self.size = 100
         self.voxel_centers_dist = self.size/self.resolution
         self.radius = -1
         while self.radius <0:
             self.radius = np.random.normal(loc = self.size*0.02, scale= self.size*0.01 ) 
         self.radius_polydispersity = -1 
         while self.radius_polydispersity <0:
-            self.radius_polydispersity = np.random.normal(loc = 0.05, scale = 0.03)
+            self.radius_polydispersity = np.random.normal(loc = 0.1, scale = 0.03)
         if self.shape == 'sphere':
-            self.parameters_dict =  {'radius': self.radius, 
+            self.parameters_dict =  {'radius': self.radius*10, 
                                     'background':0., 
                                     'sld':1.,
                                     'sld_solvent':0.,
@@ -68,7 +71,7 @@ class Hdf:
                                     'radius_pd_n': 35
             }
         elif self.shape == 'hardsphere':
-            self.parameters_dict =  {'radius': self.radius, 
+            self.parameters_dict =  {'radius': self.radius*10, 
                                     'background':0., 
                                     'sld':1.,
                                     'sld_solvent':0.,
@@ -81,23 +84,23 @@ class Hdf:
         if self.shape == 'cylinder':
             self.length = -1
             while self.length<0:
-                self.length = np.random.normal(loc = self.size*0.1, scale= self.size*0.1 )
+                self.length = np.random.normal(loc = self.size*0.1, scale= self.size*0.05 )
             self.length_polydispersity = -1
             while self.length_polydispersity<0:
-                self.length_polydispersity = np.random.normal(loc = 0.08, scale = 0.05)
+                self.length_polydispersity = np.random.normal(loc = 0.15, scale = 0.05)
             #self.theta = 90
             #self.phi = 0
             #self.phi_distr = 'uniform'
             #self.phi_pd = 4.5
 
-            self.parameters_dict =  {'radius': self.radius, 
+            self.parameters_dict =  {'radius': self.radius*10,
                                 'background':0., 
                                 'sld':1.,
                                 'sld_solvent':0.,
                                 'radius_pd': self.radius_polydispersity,
                                 'radius_pd_type': 'gaussian', 
                                 'radius_pd_n': 35,
-                                'length':self.length,
+                                'length':self.length*10,
                                 'length_pd': self.length_polydispersity,
                                 'length_pd_type':'gaussian',
                                 'length_pd_n':35,
@@ -111,7 +114,7 @@ class Hdf:
             model = core.load_model("sphere@hardsphere")
         else:
             model = core.load_model(self.shape)
-        self.qx_sas = np.linspace(-np.pi/self.voxel_centers_dist, np.pi/self.voxel_centers_dist, self.resolution)
+        self.qx_sas = np.linspace(-np.pi/self.voxel_centers_dist, np.pi/self.voxel_centers_dist, self.resolution)/10
         if self.twoD:
             q2x = self.qx_sas + 0* self.qx_sas[:,np.newaxis]
             q2y = self.qx_sas[:,np.newaxis] + 0* self.qx_sas
@@ -125,6 +128,7 @@ class Hdf:
         self.I_sas = direct_model.call_kernel(kernel, modelParameters_sas)
         if self.twoD:
             self.I_sas = self.I_sas.reshape(self.resolution,self.resolution)
+        self.I_sas*=100
         model.release()
         #noise = np.random.poisson(self.I_sas, self.I_sas.shape)
         #self.I_noisy = self.I_sas +noise  # adding some poison noise
@@ -135,15 +139,15 @@ if __name__ == '__main__':
     for i in range(1,5001):
         if i%100==0:
             print(i/5000*100,'%')
-        Hdf(f'{i:05}', '/home/slaskina/simulations/','cylinder', 512, False)
+        Hdf(f'{i:05}', '/home/slaskina/simulations2/','cylinder', 512, False)
     for i in range(1,5001):
         if i%100==0:
             print(i/5000*100,'%')
-        Hdf(f'{5000+i:05}', '/home/slaskina/simulations/','sphere', 512, False)
+        Hdf(f'{5000+i:05}', '/home/slaskina/simulations2/','sphere', 512, False)
     for i in range(1,5001):
         volfraction = np.arange(0,0.31, 0.05)
         if i%100==0:
             print(i/5000*100,'%')
-        Hdf(f'{10000+i:05}', '/home/slaskina/simulations/','hardsphere', 512, False, volfraction[i%len(volfraction)])
+        Hdf(f'{10000+i:05}', '/home/slaskina/simulations2/','hardsphere', 512, False, volfraction[i%len(volfraction)])
 
 

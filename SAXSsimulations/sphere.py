@@ -57,7 +57,7 @@ class Sphere(Simulation):
             while self.volume_fraction<self.volume_fraction_threshold:
                 radius = -1
                 while radius <= 0:
-                    radius = np.random.normal(loc = self.rMean, scale= self.rWidth)
+                    radius = np.random.normal(loc = self.rMean, scale= self.rWidth*self.rMean)
                 # generate a position that is definitely inside the box
                 center = np.random.uniform(low = -self.box_size/2 + radius, high = self.box_size/2 - radius, size = 3)
                 success = self.__generate_sphere(radius, center, nonoverlapping)

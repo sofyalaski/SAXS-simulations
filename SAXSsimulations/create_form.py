@@ -48,7 +48,7 @@ class DensityData:
         self.density.pin_memory()
 
 
-    def calculate_torch_FTI(self, device = 'cuda', slice = None, dtype = torch.complex64):
+    def calculate_torch_FTI(self, device = 'cuda', slice = None, dtype = torch.complex64, return_value = False):
         """
         Calculates Fourier transform of a 3D box with torch fftn and shifts to nyquist frequency
         input:
@@ -61,18 +61,20 @@ class DensityData:
             FT = FT.to(device)
             matrix_to_cuda = torch.cuda.memory_allocated()
             FT = torch.fft.fftn(FT, norm = 'forward')
-            matrix_fft = torch.cuda.memory_allocated()
+            matrix_fft = torch.cuda.memory_reserved()
             FT = torch.fft.fftshift(FT).cpu().detach()
             FT = torch.abs(FT)**2
             self.FTI_torch = FT
             if slice is None:
                 slice = self.nPoints//2+1
             self.FTI_slice_torch = self.FTI_torch[slice,:,:]
-            return matrix_to_cuda/1024**3, matrix_fft/1024**3
+            if return_value:
+                return matrix_to_cuda/1024**3, matrix_fft/1024**3
         except RuntimeError:
             del FT
             print("The simulation is too big to fit into GPU memory. The custom fft method <> should be used ")
-            return 0, 0
+            if return_value:
+                return 0, 0
         
     def __smallest_memory_FTI(self, dtype = torch.complex64):
         FT = self.density.type(dtype)
@@ -81,7 +83,7 @@ class DensityData:
                 FT_1D = FT[:,i,j].to('cuda')
                 matrix_to_cuda = torch.cuda.memory_allocated() 
                 FT_1D = torch.fft.fft(FT_1D, norm = 'forward')
-                matrix_fft = torch.cuda.memory_allocated()
+                matrix_fft = torch.cuda.memory_reserved()
                 FT[:,i,j] = FT_1D.cpu()
                 del FT_1D
         for k in range(FT.shape[0]):
@@ -99,7 +101,7 @@ class DensityData:
         return FT, matrix_to_cuda, matrix_fft
 
 
-    def calculate_custom_FTI(self, three_d = False, slice = None, device = 'cuda', less_memory_use = True, smallest_memory = False, dtype = torch.complex64):
+    def calculate_custom_FTI(self, three_d = False, slice = None, device = 'cuda', less_memory_use = True, smallest_memory = False, dtype = torch.complex64, return_value = False):
         FT = self.density.type(dtype)
         if three_d: 
             if smallest_memory:
@@ -111,15 +113,15 @@ class DensityData:
                         FT_2D = FT[k,:,:].to(device) 
                         matrix_to_cuda = torch.cuda.memory_allocated() # this is the biggest it gets as it's 2D
                         FT_2D = torch.fft.fft2(FT_2D, norm = 'forward')
-                        matrix_fft = torch.cuda.memory_allocated()
-                        #print((torch.cuda.memory_allocated()/1024**3), (torch.cuda.memory_cached()/1024**3))
+                        matrix_fft = torch.cuda.memory_reserved()
+                        #print((torch.cuda.memory_allocated()/1024**3), (torch.cuda.memory_reserved()/1024**3))
                         FT[k,:,:] = FT_2D.cpu()
                         del FT_2D
                 for i in range(FT.shape[1]):
                     for j in range(FT.shape[2]):  
                         FT_1D = FT[:,i,j].to(device)
                         FT_1D = torch.fft.fft(FT_1D, norm = 'forward')
-                        #print((torch.cuda.memory_allocated()/1024**3), (torch.cuda.memory_cached()/1024**3))
+                        #print((torch.cuda.memory_allocated()/1024**3), (torch.cuda.memory_reserved()/1024**3))
                         FT[:,i,j] = FT_1D.cpu()
                         del FT_1D
                 
@@ -138,7 +140,7 @@ class DensityData:
                 for k in range(FT.shape[0]):
                     if FT[k,:,:].any():
                         FT[k,:,:] = torch.fft.fft2(FT[k,:,:], norm = 'forward')
-                        matrix_fft = torch.cuda.memory_allocated()
+                        matrix_fft = torch.cuda.memory_reserved()
                 for i in range(FT.shape[1]):
                     for j in range(FT.shape[2]):                
                         FT[:,i,j] = torch.fft.fft(FT[:,i,j], norm = 'forward')
@@ -148,7 +150,8 @@ class DensityData:
             FT = torch.abs(FT)**2
             self._FTI_custom = FT
             del FT
-            return matrix_to_cuda/1024**3, matrix_fft/1024**3
+            if return_value:
+                return matrix_to_cuda/1024**3, matrix_fft/1024**3
         else:
             if slice is None:
                 slice = self.nPoints//2+1 # is slice is None get  central slice
@@ -267,9 +270,9 @@ class Simulation(DensityData):
         self.grid = torch.linspace(-self.box_size /2 , self.box_size /2, self.nPoints) 
         self._box  = torch.zeros((self.nPoints,self.nPoints,self.nPoints), dtype = torch.float32)
         self.grid_space = self.box_size/(self.nPoints-1)
-        self.__expand_Q()
+        self.__set_q()
     
-    def __expand_Q(self):
+    def __set_q(self):
         """
         convert a 1D array to the array of scattering angles and expand it 
         to 3D reciprocal(?) space to get the scattering angle Q in nm-1
@@ -277,17 +280,22 @@ class Simulation(DensityData):
         """
         voxel_centers_dist = self.box_size/self.nPoints
         self.qx = torch.linspace(-torch.pi/voxel_centers_dist, torch.pi/voxel_centers_dist, self.nPoints)
-        #qy = qx.clone()
-        #qz = qx.clone()
-        self._q2y = self.qx[None,:]
-        self._q2z = self.qx[:,None]
 
-        self._q3x = self.qx + 0 * self.qx[None,:,None] + 0 * self.qx[:,None,None]
-        self._q3y = 0 * self.qx + self.qx[None,:,None] + 0 * self.qx[:,None,None]
-        self._q3z = 0 * self.qx + 0 * self.qx[None,:,None] + self.qx[:,None,None]
+        #self._q2y = self.qx[None,:]
+        #self._q2z = self.qx[:,None]
 
-        self.Q = torch.sqrt(self._q3x**2 + self._q3y**2 + self._q3z**2)
+        #self._q3x = self.qx + 0 * self.qx[None,:,None] + 0 * self.qx[:,None,None]
+        #self._q3y = 0 * self.qx + self.qx[None,:,None] + 0 * self.qx[:,None,None]
+        #self._q3z = 0 * self.qx + 0 * self.qx[None,:,None] + self.qx[:,None,None]
 
+        #self.Q = torch.sqrt(self._q3x**2 + self._q3y**2 + self._q3z**2)
+
+    def __Q_at_slice(self, sl):
+        """ return the value of the Q vector in 3D reciprocal space at the certain slice"""
+        q2y = self.qx[None,:]
+        q2z = self.qx[:,None]
+        Q =  torch.sqrt(self.qx[sl]**2 + q2y**2 + q2z**2)
+        return Q
 
     def __sinc(self, FTI):
         """
@@ -295,14 +303,22 @@ class Simulation(DensityData):
         created as a convolution of sinc'ed voxel with the Fourier Transform of the structure
         """    
         if len(FTI.shape)==2:
-            self.sinc = torch.abs(torch.special.sinc(self._q2y*self.grid_space/2/np.pi)*torch.special.sinc(self._q2z*self.grid_space/2/np.pi))**2
+            self.sinc = torch.abs(torch.special.sinc(self.qx[None,:]*self.grid_space/2/np.pi)*torch.special.sinc(self.qx[:,None]*self.grid_space/2/np.pi))**2
         else:
-            self.sinc = torch.abs(torch.special.sinc(self._q3x*self.grid_space/2/np.pi)*torch.special.sinc(self._q3y*self.grid_space/2/np.pi)**torch.special.sinc(self._q3z*self.grid_space/2/np.pi))**2
+            self.sinc = torch.abs(torch.special.sinc(self.qx[:,None,None]*self.grid_space/2/np.pi)*torch.special.sinc(self.qx[None,:,None]*self.grid_space/2/np.pi)**torch.special.sinc( self.qx[None,None,:]*self.grid_space/2/np.pi))**2
         FTI_sinced = FTI * self.sinc
         
         #IPoisson = torch.from_numpy(np.abs(np.random.poisson(lam=100, size=FTI_sinced.shape)-100))
         #FTI_sinced = FTI_sinced# *0.0001*FTI_sinced.max()*IPoisson
-        return FTI_sinced       
+        return FTI_sinced   
+
+    def calculate_FTI_sinc_masked(self):
+            try:
+                self.FTI_sinc_masked = self.mask_FT_to_sphere(self.FTI_sinc, box_bins = self.nPoints)
+            except AttributeError:
+                print ('compute sinc function `FTI_sinc()` first!' )
+
+
 
     ################################   The rebinnning functions   ################################
     
@@ -412,19 +428,22 @@ class Simulation(DensityData):
             slice: if 'center' the central slice computed, if other integer, the slice at the integer is computed otherwise the 3D version is computed, 
         
         """
-        if for_sas:
+        if for_sas and len(self.FTI_sinc.shape) ==3:
             FTI_sinc = self.FTI_sinc[self.nPoints//2+1, :, :]
-            Q = self.Q[self.nPoints//2+1, :, :]
+            Q = self.__Q_at_slice(self.nPoints//2+1)
             self.FTI_sinc_masked = self.mask_FT_to_sphere(FTI_sinc, box_bins = self.nPoints)
             self.Q_masked = self.mask_FT_to_sphere(Q,box_bins = self.nPoints)
 
 
         if len(self.FTI_sinc.shape) ==3:
             self.FTI_sinc_masked = self.mask_FT_to_sphere(self.FTI_sinc, box_bins = self.nPoints)
-            self.Q_masked = self.mask_FT_to_sphere(self.Q,box_bins = self.nPoints)
+            Q = torch.zeros_like(self.FTI_sinc)
+            for i in range(self.FTI_sinc.shape[0]):
+                Q[i,:,:] = self.__Q_at_slice(i)
+            self.Q_masked = self.mask_FT_to_sphere(Q,box_bins = self.nPoints)
         else:
             self.FTI_sinc_masked = self.mask_FT_to_sphere(self.FTI_sinc)
-            self.Q_masked =  self.mask_FT_to_sphere(self.Q[self.nPoints//2+1,:,:])
+            self.Q_masked =  self.mask_FT_to_sphere(self.__Q_at_slice(self.nPoints//2+1))
         
         Q_masked_no_nan = self.Q_masked[~self.Q_masked.isnan()]
         FTI_masked_no_nan = self.FTI_sinc_masked[~self.FTI_sinc_masked.isnan()]
@@ -447,7 +466,7 @@ class Simulation(DensityData):
             # accumulate bins of slices in a new Data Frame
             binned_slices = pd.DataFrame()
             for nSlice in range(self.FTI_sinc.shape[0]):
-                Q = self.Q[nSlice,:,:][~self.Q[nSlice,:,:].isnan()]
+                Q = self.__Q_at_slice(n_slice)                    
                 I = self.FTI_sinc[nSlice,:,:][~self.FTI_sinc[nSlice,:,:].isnan()]
                 df = pd.DataFrame({'Q':Q, 
                                 'I':I,
@@ -481,7 +500,7 @@ class Simulation(DensityData):
             QEMin: coefficent used to determine QSigma
         """
         
-        Q_central_slice = self.Q[self.nPoints//2+1,:,:]
+        Q_central_slice = self.__Q_at_slice(self.nPoints//2+1)
         FTI = self.FTI_sinc[self.nPoints//2+1,:,:].numpy()if len(self.FTI_sinc.shape)==3 else self.FTI_sinc.numpy()
         qMin = float(self.qx[self.qx!=0].min())
         qMax = float(self.qx.max())
@@ -553,7 +572,7 @@ class Simulation(DensityData):
                 'background':0., 
                 'sld':1.,
                 'sld_solvent':0.,
-                'radius_pd': self.rWidth/self.rMean, 
+                'radius_pd': self.rWidth, 
                 'radius_pd_type': 'gaussian', 
                 'radius_pd_n': 35
                 })
@@ -570,11 +589,11 @@ class Simulation(DensityData):
                 'background':0., 
                 'sld':1.,
                 'sld_solvent':0.,
-                'radius_pd': self.rWidth/self.rMean, #0.1
+                'radius_pd': self.rWidth, #0.1
                 'radius_pd_type': 'gaussian', 
                 'radius_pd_n': 35, 
                 'length': self.hMean*10, 
-                'length_pd': self.hWidth/self.hMean, #0.15
+                'length_pd': self.hWidth, #0.15
                 'length_pd_type': 'gaussian', 
                 'length_pd_n': 35,          
                 'theta':90,    
@@ -594,7 +613,7 @@ class Simulation(DensityData):
         """    
         q2x = np.arange(self.nBins) + 0* np.arange(self.nBins)[:,np.newaxis]
         q2y = np.arange(self.nBins)[:,np.newaxis] + 0* np.arange(self.nBins)
-        mask = (q2x-self.nBins//2+1)**2 + (q2y-self.nBins//2+1)**2 > np.round(self.nBins/50)**2 # on the right side is the radius of sphere(in pixel) to mask in center 1% of box size 
+        mask = (q2x-(self.nBins//2+1))**2 + (q2y-(self.nBins//2+1))**2 > np.round(self.nBins/50)**2 # on the right side is the radius of sphere(in pixel) to mask in center 1% of box size 
         mask = self.mask_FT_to_sphere(torch.from_numpy(mask),box_bins =  self.nBins, fill_value=False).numpy()
         self.I_sas = np.where(mask, self.I_sas, np.nan)
         self.binned_slice["I"] = np.where(mask, self.binned_slice.I.values.reshape(self.nBins, self.nBins), np.nan).flatten()
@@ -613,7 +632,7 @@ class Simulation(DensityData):
             q2z = q2z.reshape(q2z.size)
             self.kernel=self.model.make_kernel([q2y, q2z])
             self.I_sas = direct_model.call_kernel(self.kernel, self.modelParameters_sas)
-            self.I_sas = self.I_sas.reshape(self.nBins, self.nBins)
+            self.I_sas = self.I_sas.reshape(self.nBins, self.nBins)*100                             # bring values to the (m_sr)-1 scale 
         self.model.release()
 
 

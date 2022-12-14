@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 from SAXSsimulations import  Sphere, Cylinder, DensityData
 from SAXSsimulations.utils import compute_error
-os.environ["CUDA_VISIBLE_DEVICES"] = "1,2,3"
+os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 cl.create_some_context()
 
 def timer_wrapper(func, **kwargs):
@@ -22,6 +22,8 @@ def run_spheres(sim_size):
             simulation.place_shape(rMean = 0.05, rWidth = 0.1, nonoverlapping=False)
             simulation.pin_memory()
             torch_32_time, (torch_mem_32, torch_fft_32)  = timer_wrapper(simulation.calculate_torch_FTI, device = 'cuda') 
+            if torch_fft_32 ==0:
+                torch_32_time =0
             simple_split_32_time, (simple_split_mem_32, simple_split_fft_32) = timer_wrapper( simulation.calculate_custom_FTI, three_d = True, device = 'cuda', less_memory_use=True)
             cpu_time_32,(_,_) = timer_wrapper(simulation.calculate_custom_FTI, three_d = True, device = 'cpu')
   
@@ -47,6 +49,8 @@ def run_spheres(sim_size):
             
             simple_split_64_time, (simple_split_mem_64, simple_split_fft_64) = timer_wrapper(simulation.calculate_custom_FTI, three_d = True, device = 'cuda', less_memory_use=True, dtype = torch.complex128)
             torch_64_time, (torch_mem_64, torch_fft_64)  = timer_wrapper(simulation.calculate_torch_FTI, device = 'cuda', dtype = torch.complex128) 
+            if torch_fft_64 ==0:
+                torch_64_time =0
             cpu_time_64,(_,_) = timer_wrapper(simulation.calculate_custom_FTI, three_d = True, device = 'cpu', dtype = torch.complex128)
             if size>=729:
                 split_64_time,split_mem_64, split_fft_64 = 0,0,0
@@ -95,16 +99,18 @@ def run_spheres(sim_size):
                 'chi2_32': chi_error_32, 
                 'chi2_64': chi_error_64
             }, index = [i*len(sim_size)+t])
-            one_run.to_csv('results_fft.csv', mode = 'a', header =False)
+            one_run.to_csv('results_fft_new.csv', mode = 'a', header =False)
 
 
 def run_hardspheres(sim_size):
     for i in range(10):
         for t, size in enumerate (sim_size):
-            simulation = Sphere(size = 10, nPoints = size, volFrac = 0.1)
+            simulation = Sphere(size = 10, nPoints = size, volFrac = 0.15)
             simulation.place_shape(rMean = 0.05, rWidth = 0.1, nonoverlapping=True)
             simulation.pin_memory()
             torch_32_time, (torch_mem_32, torch_fft_32)  = timer_wrapper(simulation.calculate_torch_FTI, device = 'cuda') 
+            if torch_fft_32 ==0:
+                torch_32_time =0
             simple_split_32_time, (simple_split_mem_32, simple_split_fft_32) = timer_wrapper( simulation.calculate_custom_FTI, three_d = True, device = 'cuda', less_memory_use=True)
             cpu_time_32,(_,_) = timer_wrapper(simulation.calculate_custom_FTI, three_d = True, device = 'cpu')
             if size>=729:
@@ -128,6 +134,8 @@ def run_hardspheres(sim_size):
             
             simple_split_64_time, (simple_split_mem_64, simple_split_fft_64) = timer_wrapper(simulation.calculate_custom_FTI, three_d = True, device = 'cuda', less_memory_use=True, dtype = torch.complex128)
             torch_64_time, (torch_mem_64, torch_fft_64)  = timer_wrapper(simulation.calculate_torch_FTI, device = 'cuda', dtype = torch.complex128) 
+            if torch_fft_64 ==0:
+                torch_64_time =0
             cpu_time_64,(_,_) = timer_wrapper(simulation.calculate_custom_FTI, three_d = True, device = 'cpu', dtype = torch.complex128)
             if size>=729:
                 split_64_time,split_mem_64, split_fft_64 = 0,0,0
@@ -176,16 +184,18 @@ def run_hardspheres(sim_size):
                 'chi2_32': chi_error_32, 
                 'chi2_64': chi_error_64
             }, index = [i*len(sim_size)+t])
-            one_run.to_csv('results_fft.csv', mode = 'a', header =False)
+            one_run.to_csv('results_fft_new.csv', mode = 'a', header =False)
 
 def run_cylinders(sim_size):
-    for i in range(10):
+    for i in range(5):
         for t, size in enumerate (sim_size):
             simulation = Cylinder(size = 10, nPoints = size, volFrac = 0.01)
             simulation.place_shape(rMean = 0.05, rWidth = 0.1, hMean = 3, hWidth = 0.17, theta = 10, nonoverlapping=False)
             simulation.pin_memory()
 
             torch_32_time, (torch_mem_32, torch_fft_32)  = timer_wrapper(simulation.calculate_torch_FTI, device = 'cuda') 
+            if torch_fft_32 ==0:
+                torch_32_time =0
             simple_split_32_time, (simple_split_mem_32, simple_split_fft_32) = timer_wrapper( simulation.calculate_custom_FTI, three_d = True, device = 'cuda', less_memory_use=True)
             cpu_time_32,(_,_) = timer_wrapper(simulation.calculate_custom_FTI, three_d = True, device = 'cpu',)
             if size>=729:
@@ -207,6 +217,8 @@ def run_cylinders(sim_size):
             
             simple_split_64_time, (simple_split_mem_64, simple_split_fft_64) = timer_wrapper(simulation.calculate_custom_FTI, three_d = True, device = 'cuda', less_memory_use=True, dtype = torch.complex128)
             torch_64_time, (torch_mem_64, torch_fft_64)  = timer_wrapper(simulation.calculate_torch_FTI, device = 'cuda', dtype = torch.complex128) 
+            if torch_fft_64 ==0:
+                torch_64_time =0
             cpu_time_64,(_,_) = timer_wrapper(simulation.calculate_custom_FTI, three_d = True, device = 'cpu', dtype = torch.complex128)
             if size>=729:
                 split_64_time,split_mem_64, split_fft_64 = 0,0,0
@@ -253,13 +265,13 @@ def run_cylinders(sim_size):
                 'chi2_32': chi_error_32, 
                 'chi2_64': chi_error_64
             }, index = [i*len(sim_size)+t])
-            one_run.to_csv('results_fft.csv', mode = 'a', header =False)
+            one_run.to_csv('results_fft_new.csv', mode = 'a', header =False)
 
 def main():
     sim_size = [81, 125,243,343,441,625,729,875,945]
-    run_spheres(sim_size)
+    #run_spheres(sim_size)
     #run_hardspheres(sim_size)
-    #run_cylinders(sim_size)
+    run_cylinders(sim_size)
 
 
 if __name__ == '__main__':

@@ -94,8 +94,8 @@ class Cylinder(Simulation):
             while self.volume_fraction<self.volume_fraction_threshold and (time.time()-st)<1200: # 20 min max
                 success = False
                 while success == False:
-                    height = np.random.normal(loc = self.hMean, scale= self.hWidth)
-                    radius = np.random.normal(loc = self.rMean, scale= self.rWidth )
+                    height = np.random.normal(loc = self.hMean, scale= self.hWidth*self.hMean)
+                    radius = np.random.normal(loc = self.rMean, scale= self.rWidth*self.rMean )
                     theta = int(np.random.normal(loc = self.theta, scale= self.thetaWidth ) )
                     phi = int(np.random.uniform(low = 0, high = 360))
                     center = np.zeros(3)
