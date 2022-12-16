@@ -15,7 +15,7 @@ import FrEIA.modules as Fm
 
 import losses
 import monitoring
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import StandardScaler, MinMaxScaler
 
 
 
@@ -143,8 +143,10 @@ class ScatteringProblemSplit:
                                 self.inputs[i, i_k+2:i_k+5] = torch.tensor([0,file['properties'][key][()],0])
                             else:
                                 self.inputs[i, i_k+2:i_k+5] = torch.tensor([0,0,file['properties'][key][()]])
+                            #self.inputs[i, i_k+2] = file['properties'][key][()]
                         else:
                             self.inputs[i, i_k+4] = file['properties'][key][()]
+                            #self.inputs[i, i_k+2] = file['properties'][key][()]
                     except KeyError:
                         # spheres don't have all of the properties a cylinder does
                         pass
@@ -152,10 +154,22 @@ class ScatteringProblemSplit:
             self.inputs = torch.cat((self.inputs,conditions),1)
 
     def normalize_inputs(self):
+        #self.scaler = torch.zeros(7,2)
+        #self.inputs_norm = torch.clone(self.inputs)
+        #for i in range(7):
+        #    self.scaler[i,0] = self.inputs[:, 3+i].nanmean()
+        #    nonzero_idx = torch.nonzero(self.inputs[:, 3+i]).reshape(1, -1)
+        #    self.scaler[i,1] = self.inputs[:, 3+i][nonzero_idx].std()
+        #    x = self.inputs_norm[:,3+i]
+        #    self.inputs_norm[:,3+i] = torch.where( x!=0, (x -self.scaler[0,0]) / self.scaler[0,1],0)
+            
         self.scaler = StandardScaler()
         self.scaler.fit(self.inputs[:,3:])
         self.inputs_norm = self.scaler.transform(self.inputs[:,3:])
         self.inputs_norm = torch.concatenate((self.inputs[:,:3],torch.from_numpy(self.inputs_norm) ), axis=1).type(torch.float32)
+        #self.scaler.fit(self.inputs[:,3:])
+        #self.inputs_norm = self.scaler.transform(self.inputs[:,3:])
+        #self.inputs_norm = torch.concatenate((self.inputs[:,:3],torch.from_numpy(self.inputs_norm) ), axis=1).type(torch.float32)
 
 
     def create_loaders(self):
@@ -300,7 +314,7 @@ class ScatteringProblemSplit:
 
             batch_losses.extend(self.loss_forward_mmd(out_y, y))
             batch_losses.append(self.loss_backward_mmd(x_class,x_features, y))
-            batch_losses.append(self.loss_reconstruction(out_y.data, x_class, x_features))
+            #batch_losses.append(self.loss_reconstruction(out_y.data, x_class, x_features))
 
             l_total = sum(batch_losses)
             loss_history.append([l.item() for l in batch_losses]) # lisr of lists: list for each batch
@@ -340,6 +354,14 @@ class ScatteringProblemSplit:
             print("\n\nTraining took %f minutes\n\n" % ((time()-t_start)/60.))
             self.save(self.filename_out)
 
+    def scale_back(self, predictions):
+        scaled_predictions = np.copy(predictions)
+        for i in range(7):
+            x = predictions[:, 3+i]
+            
+            scaled_predictions[:,3+i] = x * float(self.scaler[i, 1]) + float(self.scaler[i,0])
+        return scaled_predictions
+
 
     def make_prediction(self, data_subset, cond = None):
         y = torch.cat((self.add_pad_noise * torch.randn( len(self.labels[data_subset]), self.ndim_pad_zy).to(self.device), self.labels[data_subset].to(self.device)), dim=1)
@@ -350,12 +372,10 @@ class ScatteringProblemSplit:
             [pred_class, pred_features], _ = self.model(y, rev = True, c=cond.to(self.device))  # output of NN without padding
         predictions =  np.concatenate((pred_class.cpu().detach()[:,:self.ndim_x_class], pred_features.cpu().detach()[:, :self.ndim_x_features]), axis=1)
         return np.concatenate((predictions[:,:3],self.scaler.inverse_transform(predictions[:,3:])), axis=1)
+        #return self.scale_back(predictions)
 
     def create_table_from_outcomes(self, pred, data_subset):
-        try:
-            sampled_inputs = self.inputs_norm[data_subset]
-        except AttributeError:
-            sampled_inputs = self.inputs[data_subset]
+        sampled_inputs = self.inputs[data_subset]
         df = pd.DataFrame(columns = ['true_shape', 'pred_shape', 'radius','pred_radius'], index = [])
         df['true_shape'] = sampled_inputs[:,:3].argmax(axis=1)
         df['pred_shape'] = pred[:,:3].argmax(axis=1)
@@ -491,7 +511,7 @@ class ScatteringProblem(ScatteringProblemSplit):
 
             batch_losses.extend(self.loss_forward_mmd(out_y, y))
             batch_losses.append(self.loss_backward_mmd(x, y))
-            batch_losses.append(self.loss_reconstruction(out_y.data, x))
+            #batch_losses.append(self.loss_reconstruction(out_y.data, x))
 
             l_total = sum(batch_losses)
             loss_history.append([l.item() for l in batch_losses]) # lisr of lists: list for each batch
@@ -560,7 +580,7 @@ class ScatteringProblemIResNet(ScatteringProblemSplit):
 
             batch_losses.extend(self.loss_forward_mmd(out_y, y))
             batch_losses.append(self.loss_backward_mmd(x_class,x_features, y))
-            batch_losses.append(self.loss_reconstruction(out_y.data, x_class, x_features))
+            #batch_losses.append(self.loss_reconstruction(out_y.data, x_class, x_features))
 
             l_total = sum(batch_losses)
             loss_history.append([l.item() for l in batch_losses]) # lisr of lists: list for each batch
@@ -681,6 +701,34 @@ class ScatteringProblemForward(ScatteringProblemSplit):
         self.scaler.fit(self.inputs)
         self.inputs_norm = torch.from_numpy(self.scaler.transform(self.inputs)).type(torch.float32)
 
+    def create_loaders(self):
+        # Creating data indices for training and validation splits:
+        dataset_size = len(self.labels)
+        indices = list(range(dataset_size))
+        test_size = 0.1
+        val_size = 0.2
+        test_split = int(np.floor(test_size * dataset_size))
+        val_split = int(np.floor(val_size * dataset_size))
+        np.random.seed(1234)
+        np.random.shuffle(indices)
+        self.train_indices, self.val_indices, self.test_indices = indices[:dataset_size-test_split-val_split], indices[dataset_size-test_split-val_split:dataset_size-test_split], indices[dataset_size-test_split:]
+
+        # Creating PT data samplers and loaders:
+        train_sampler = SubsetRandomSampler(self.train_indices)
+        val_sampler = SubsetRandomSampler(self.val_indices)
+
+        try:
+            self.test_loader = torch.utils.data.DataLoader(
+                torch.utils.data.TensorDataset(self.inputs, self.labels_norm), batch_size=self.batch_size, drop_last=True, sampler = val_sampler)
+
+            self.train_loader = torch.utils.data.DataLoader(
+                torch.utils.data.TensorDataset(self.inputs, self.labels_norm), batch_size=self.batch_size, drop_last=True, sampler = train_sampler)
+        except AttributeError:
+            self.test_loader = torch.utils.data.DataLoader(
+                torch.utils.data.TensorDataset(self.inputs, self.labels), batch_size=self.batch_size, drop_last=True, sampler = val_sampler)
+
+            self.train_loader = torch.utils.data.DataLoader(
+                torch.utils.data.TensorDataset(self.inputs, self.labels), batch_size=self.batch_size, drop_last=True, sampler = train_sampler)
 
     def loss_forward_mmd(self, x_class, x_features, pred):
         pred_class, pred_features = pred[:,:3], pred[:, 3:]
@@ -760,13 +808,8 @@ class ScatteringProblemForward(ScatteringProblemSplit):
         self.model.to('cpu')
         return self.model(self.inputs_norm[data_subset]).cpu().detach()
 
-
-
     def create_table_from_outcomes(self, pred, data_subset):
-        try:
-            sampled_labels = self.labels[data_subset]
-        except AttributeError:
-            sampled_labels = self.labels[data_subset]
+        sampled_labels = self.labels[data_subset]
         df = pd.DataFrame(columns = ['true_shape', 'pred_shape', 'radius','pred_radius'], index = [])
         df['true_shape'] = sampled_labels[:,:3].argmax(axis=1)
         df['pred_shape'] = pred[:,:3].argmax(axis=1)
@@ -782,3 +825,135 @@ class ScatteringProblemForward(ScatteringProblemSplit):
         df['pred_volfraction'] = pred[:,9]
         return df
 
+
+
+
+class ScatterindPerShape(ScatteringProblemSplit):
+    def __init__(self, device, batch_size, ndim_x_class, ndim_x_features, ndim_y, ndim_z, ndim_pad_x_class, ndim_pad_x_features, ndim_pad_zy, init_scale, final_decay, n_epochs, lr_init, adam_betas, l2_weight_reg, lambd_fit_forw, lambd_mmd_forw, lambd_mmd_back_class, lambd_mmd_back_feature, lambd_reconstruct, mmd_back_weighted, y_uncertainty_sigma, add_pad_noise, add_z_noise, add_y_noise, n_its_per_epoch, pre_low_lr, filename_out, mmd_forw_kernels, mmd_back_kernels):
+        super().__init__(device, batch_size, ndim_x_class, ndim_x_features, ndim_y, ndim_z, ndim_pad_x_class, ndim_pad_x_features, ndim_pad_zy, init_scale, final_decay, n_epochs, lr_init, adam_betas, l2_weight_reg, lambd_fit_forw, lambd_mmd_forw, lambd_mmd_back_class, lambd_mmd_back_feature, lambd_reconstruct, mmd_back_weighted, y_uncertainty_sigma, add_pad_noise, add_z_noise, add_y_noise, n_its_per_epoch, pre_low_lr, filename_out, mmd_forw_kernels, mmd_back_kernels)
+    
+
+    def normalize_inputs(self):
+        self.scaler = StandardScaler()
+        self.scaler.fit(self.inputs)
+        self.inputs_norm = torch.from_numpy(self.scaler.transform(self.inputs)).type(torch.float32)
+
+
+    def extract_shape(self, shape):
+        if shape == 'sphere':
+            idx  = self.inputs[:,0]==1
+            self.inputs =  self.inputs[idx][:, 3:]
+            self.labels = self.labels[idx]
+        elif shape == 'hardsphere':
+            idx = self.inputs[:,1]==1
+            self.inputs =  self.inputs[idx][:, 3:]
+            self.labels =  self.labels[idx]
+        else:
+            idx = self.inputs[:,2]==1
+            self.inputs = self.inputs[idx][:, 3:]
+            self.labels = self.labels[idx]
+    
+   
+
+    def loss_backward_mmd(self, x_features, y):
+        x_samples_features, x_samples_jac = self.model(y, rev=True, jac = True) 
+        MMD_features = losses.backward_mmd(x_features, x_samples_features, self.mmd_back_kernels, self.device)
+        if self.mmd_back_weighted:
+            MMD_features *= torch.exp(- 0.5 / self.y_uncertainty_sigma**2 * losses.l2_dist_matrix(y, y))
+        return self.lambd_mmd_back_feature * torch.mean(MMD_features)
+
+
+    def train_epoch(self, i_epoch, test=False):
+        if not test:
+            self.model.train()
+            loader = self.train_loader
+
+        if test:
+            self.model.eval()
+            loader = self.test_loader
+            nograd = torch.no_grad()
+            nograd.__enter__()
+
+
+        batch_idx = 0
+        loss_history = []
+
+        for x, y in loader:
+
+            if batch_idx > self.n_its_per_epoch:
+                break
+            batch_losses = []
+
+            batch_idx += 1
+
+            #x, y = Variable(x).to(device), Variable(y).to(device)
+            x, y = x.to(self.device), y.to(self.device)
+
+            if self.add_y_noise > 0:
+                y += self.add_y_noise * self.noise_batch(self.ndim_y)
+
+            if self.ndim_pad_x_features:
+                x = torch.cat((x, self.add_pad_noise * self.noise_batch(self.ndim_pad_x_features)), dim=1)
+
+            if self.ndim_pad_zy:
+                y = torch.cat((self.add_pad_noise * self.noise_batch(self.ndim_pad_zy), y), dim=1)
+            # y = [z, pad_yz, y]
+            y = torch.cat((self.noise_batch(self.ndim_z), y), dim=1)
+            out_y, out_y_jac = self.model(x, jac  = False)
+            # tuple with output[0] and jacobian[1]
+
+            batch_losses.extend(self.loss_forward_mmd(out_y, y))
+
+            batch_losses.append(self.loss_backward_mmd( x, y))
+
+            #batch_losses.append(self.loss_reconstruction( out_y.data, x))
+
+            l_total = sum(batch_losses)
+            loss_history.append([l.item() for l in batch_losses]) # lisr of lists: list for each batch
+            if not test:
+                l_total.backward()
+                self.optim_step()
+
+        if test:
+            monitoring.show_hist(out_y[:, :self.ndim_z])
+            monitoring.show_cov(out_y[:, :self.ndim_z])
+            nograd.__exit__(None, None, None)
+        return np.mean(loss_history, axis=0)
+
+    def train(self,):
+        monitoring.restart()
+
+        try:
+            t_start = time()
+            for i_epoch in range(-self.pre_low_lr, self.n_epochs):
+
+                if i_epoch < 0:
+                    for param_group in self.optim.param_groups:
+                        param_group['lr'] = self.lr_init * 1e-1
+
+                train_losses = self.train_epoch(i_epoch) # mean over batches
+                test_losses  = self.train_epoch(i_epoch,  test=True)
+                t = np.concatenate([train_losses, test_losses])
+                monitoring.show_loss(t)
+
+        except:
+            self.save( self.filename_out + '_ABORT')
+            raise
+
+        finally:
+            print("\n\nTraining took %f minutes\n\n" % ((time()-t_start)/60.))
+            self.save( self.filename_out)
+
+    def make_prediction(self, data_subset):
+        y = torch.cat((self.add_pad_noise * torch.randn( len(self.labels[data_subset]), self.ndim_pad_zy).to(self.device), self.labels[data_subset].to(self.device)), dim=1)
+        y = torch.cat((torch.randn( len(self.labels[data_subset]), self.ndim_z).to(self.device), y), dim=1)
+        pred_features, _ = self.model(y, rev = True)  # output of NN without padding
+        predictions =  pred_features.cpu().detach()[:, :self.ndim_x_features]
+        return self.scaler.inverse_transform(predictions)
+
+
+
+
+
+
+        
