@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#run spheres in sizes [81, 125,243,343,441,625,729,875,945] in dtype 32 and 64, each 5 times
+#run spheres in sizes [81, 125,243,343,441,625,729,875,945] in dtype 32 and 64, each 5 times to compare memory, time and error
 
 shapes=("cylinder" "sphere" "hardsphere")
 sizeValues=(81 125 243 343 441 625 729 875 945)

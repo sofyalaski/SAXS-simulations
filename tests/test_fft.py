@@ -15,6 +15,8 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 os.environ['PYOPENCL_CTX'] = "0"
 cl.create_some_context()
 
+## In this code for each shape run a simulation in certain size and data type to obtain its metrics on time and memory requirments for diffrent shapes.
+
 def timer_wrapper(func, **kwargs):
     st = time.time()
     r = func(**kwargs)
@@ -121,7 +123,7 @@ def run_hardspheres(size, dtype):
 
 def run_cylinders(size, dtype):
     simulation = Cylinder(size = 250, nPoints = size, volFrac = 0.01)
-    simulation.place_shape(rMean = 5, hMean = 25,  rWidth = 0.1, nonoverlapping=False)
+    simulation.place_shape(rMean = 5, hMean = 25,  rWidth = 0.1)
     simulation.pin_memory()
     if size>=729:
         split_time,split_mem, split_fft = 0,0,0

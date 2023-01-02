@@ -10,6 +10,9 @@ sys.path.append('/home/slaskina/SAXS-simulations')
 from SAXSsimulations import  Sphere, Cylinder, DensityData
 from SAXSsimulations.plotting import *
 
+## Foe each shape type this code visually compares the 3D simulated, FFTed rebinned scattering pattern/curve with the SasView simulation and saves figure.
+## 3D simulations have different resolution.
+
 def compare_hardspheres():
     sizes = [81, 125,243,343,441,625,729,875,945]
     plt.figure(figsize = (12,6))

@@ -10,6 +10,7 @@ sys.path.append('/home/slaskina/SAXS-simulations')
 from SAXSsimulations import  Sphere, Cylinder, DensityData
 from SAXSsimulations.plotting import *
 
+### This code creates 3D simulated hardspheres in the same setting(box size, radius, polydispersity. The only parameter to change is the volume fraction)
 
 def compare_volfrcation():
     vf = [0.01, 0.05, 0.075, 0.1, 0.15, 0.3,0.25]

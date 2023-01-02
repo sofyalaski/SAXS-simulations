@@ -15,7 +15,7 @@ import FrEIA.modules as Fm
 
 import losses
 import monitoring
-from sklearn.preprocessing import StandardScaler, MinMaxScaler
+from sklearn.preprocessing import StandardScaler, MinMaxScaler, Normalizer
 
 
 
@@ -180,7 +180,7 @@ class ScatteringProblemSplit:
         val_size = 0.2
         test_split = int(np.floor(test_size * dataset_size))
         val_split = int(np.floor(val_size * dataset_size))
-        np.random.seed(1234)
+        
         np.random.shuffle(indices)
         self.train_indices, self.val_indices, self.test_indices = indices[:dataset_size-test_split-val_split], indices[dataset_size-test_split-val_split:dataset_size-test_split], indices[dataset_size-test_split:]
 
@@ -538,9 +538,9 @@ class ScatteringProblem(ScatteringProblemSplit):
 
 
 
-class ScatteringProblemIResNet(ScatteringProblemSplit):
-    def __init__(self, device, batch_size, ndim_x_class, ndim_x_features, ndim_y, ndim_z, ndim_pad_x_class, ndim_pad_x_features, ndim_pad_zy, init_scale, final_decay, n_epochs, lr_init, adam_betas, l2_weight_reg, lambd_fit_forw, lambd_mmd_forw, lambd_mmd_back_class, lambd_mmd_back_feature, lambd_reconstruct, mmd_back_weighted, y_uncertainty_sigma, add_pad_noise, add_z_noise, add_y_noise, n_its_per_epoch, pre_low_lr, filename_out, mmd_forw_kernels, mmd_back_kernels):
-        super().__init__(device, batch_size, ndim_x_class, ndim_x_features, ndim_y, ndim_z, ndim_pad_x_class, ndim_pad_x_features, ndim_pad_zy, init_scale, final_decay, n_epochs, lr_init, adam_betas, l2_weight_reg, lambd_fit_forw, lambd_mmd_forw, lambd_mmd_back_class, lambd_mmd_back_feature, lambd_reconstruct, mmd_back_weighted, y_uncertainty_sigma, add_pad_noise, add_z_noise, add_y_noise, n_its_per_epoch, pre_low_lr, filename_out, mmd_forw_kernels, mmd_back_kernels)
+class ScatteringProblemIResNet(ScatteringProblem):
+    def __init__(self, device, batch_size, ndim_x, ndim_y, ndim_z, ndim_pad_x, ndim_pad_zy, init_scale, final_decay, n_epochs, lr_init, adam_betas, l2_weight_reg, lambd_fit_forw, lambd_mmd_forw, lambd_mmd_back, lambd_reconstruct, mmd_back_weighted, y_uncertainty_sigma, add_pad_noise, add_z_noise, add_y_noise, n_its_per_epoch, pre_low_lr, filename_out, mmd_forw_kernels, mmd_back_kernels):
+        super().__init__( device, batch_size, ndim_x, ndim_y, ndim_z, ndim_pad_x, ndim_pad_zy, init_scale, final_decay, n_epochs, lr_init, adam_betas, l2_weight_reg, lambd_fit_forw, lambd_mmd_forw, lambd_mmd_back, lambd_reconstruct, mmd_back_weighted, y_uncertainty_sigma, add_pad_noise, add_z_noise, add_y_noise, n_its_per_epoch, pre_low_lr, filename_out, mmd_forw_kernels, mmd_back_kernels)
 
 
     def train_epoch(self,i_epoch, test=False):
@@ -566,20 +566,17 @@ class ScatteringProblemIResNet(ScatteringProblemSplit):
 
             if self.add_y_noise > 0:
                 y += self.add_y_noise * self.noise_batch(self.ndim_y)
-            if self.ndim_pad_x_class:
-                x_class = torch.cat((x[:,:3], self.add_pad_noise * self.noise_batch(self.ndim_pad_x_class)), dim=1)
-            
-            if self.ndim_pad_x_features:
-                x_features = torch.cat((x[:,3:], self.add_pad_noise * self.noise_batch(self.ndim_pad_x_features)), dim=1)
+            if self.ndim_pad_x:
+                x = torch.cat((x, self.add_pad_noise * self.noise_batch(self.ndim_pad_x)), dim=1)
             if self.ndim_pad_zy:
                 y = torch.cat((self.add_pad_noise * self.noise_batch(self.ndim_pad_zy), y), dim=1)
             y = torch.cat((self.noise_batch(self.ndim_z), y), dim=1)
-
-            out_y, out_y_jac = self.model([x_class,x_features], jac  = True)
+            
+            out_y, out_y_jac = self.model([x], jac  = True)
             # tuple with output[0] and jacobian[1]
 
             batch_losses.extend(self.loss_forward_mmd(out_y, y))
-            batch_losses.append(self.loss_backward_mmd(x_class,x_features, y))
+            batch_losses.append(self.loss_backward_mmd(x, y))
             #batch_losses.append(self.loss_reconstruction(out_y.data, x_class, x_features))
 
             l_total = sum(batch_losses)
@@ -697,9 +694,8 @@ class ScatteringProblemForward(ScatteringProblemSplit):
                         
 
     def normalize_inputs(self):
-        self.scaler = StandardScaler()
-        self.scaler.fit(self.inputs)
-        self.inputs_norm = torch.from_numpy(self.scaler.transform(self.inputs)).type(torch.float32)
+        self.scaler = Normalizer()
+        self.inputs_norm = torch.from_numpy(self.scaler.fit_transform(self.inputs)).type(torch.float32)
 
     def create_loaders(self):
         # Creating data indices for training and validation splits:
@@ -709,7 +705,7 @@ class ScatteringProblemForward(ScatteringProblemSplit):
         val_size = 0.2
         test_split = int(np.floor(test_size * dataset_size))
         val_split = int(np.floor(val_size * dataset_size))
-        np.random.seed(1234)
+        
         np.random.shuffle(indices)
         self.train_indices, self.val_indices, self.test_indices = indices[:dataset_size-test_split-val_split], indices[dataset_size-test_split-val_split:dataset_size-test_split], indices[dataset_size-test_split:]
 
@@ -719,10 +715,10 @@ class ScatteringProblemForward(ScatteringProblemSplit):
 
         try:
             self.test_loader = torch.utils.data.DataLoader(
-                torch.utils.data.TensorDataset(self.inputs, self.labels_norm), batch_size=self.batch_size, drop_last=True, sampler = val_sampler)
+                torch.utils.data.TensorDataset(self.inputs_norm, self.labels), batch_size=self.batch_size, drop_last=True, sampler = val_sampler)
 
             self.train_loader = torch.utils.data.DataLoader(
-                torch.utils.data.TensorDataset(self.inputs, self.labels_norm), batch_size=self.batch_size, drop_last=True, sampler = train_sampler)
+                torch.utils.data.TensorDataset(self.inputs_norm, self.labels), batch_size=self.batch_size, drop_last=True, sampler = train_sampler)
         except AttributeError:
             self.test_loader = torch.utils.data.DataLoader(
                 torch.utils.data.TensorDataset(self.inputs, self.labels), batch_size=self.batch_size, drop_last=True, sampler = val_sampler)
@@ -806,7 +802,10 @@ class ScatteringProblemForward(ScatteringProblemSplit):
 
     def make_prediction(self, data_subset):# labels, model):
         self.model.to('cpu')
-        return self.model(self.inputs_norm[data_subset]).cpu().detach()
+        try:
+            return self.model(self.inputs_norm[data_subset]).cpu().detach()
+        except AttributeError:
+            return self.model(self.inputs[data_subset]).cpu().detach()
 
     def create_table_from_outcomes(self, pred, data_subset):
         sampled_labels = self.labels[data_subset]

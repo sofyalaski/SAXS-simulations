@@ -24,6 +24,7 @@ def set_label(row, true_shape, label_true, label_false):
         return label_false
 
 
+
 def plot_outcomes_identified(df, data_name):
     print('Accuracy is {0:.2%}'.format((df.true_shape == df.pred_shape).sum()/len(df)))
     fig, axes = plt.subplots(ncols=3, nrows=2, figsize=(16, 8))
@@ -34,6 +35,7 @@ def plot_outcomes_identified(df, data_name):
     wrong = [((df.true_shape == 0) & (df.pred_shape != 0)).sum(),((df.true_shape == 1) & (df.pred_shape != 1)).sum(),((df.true_shape == 2) & (df.pred_shape != 2)).sum()]
     correct = [correct[i]/(correct[i]+ wrong[i])*100 for i in range(len(correct))]
     wrong = [100-correct[i] for i in range(len(wrong))]
+    print(correct)
     ax = axes[0,0]
     ax.bar(shapes, correct, width=0.35, label='correct', color = 'peachpuff')
     ax.bar(shapes, wrong, width=0.35,bottom=correct, label='misclassified', color = 'plum')
@@ -76,21 +78,23 @@ def plot_outcomes_identified(df, data_name):
     data = df_stacked[(df_stacked.feature == 'radius')|(df_stacked.feature == 'pred_radius')]
     data.loc[data.feature == 'radius', 'feature'] = "sampled"
     data.loc[data.feature == 'pred_radius', 'feature'] = "predicted"
-    sns.violinplot(data = data.sort_values(by = 'feature', ascending = False), x="true_shape", y="value", hue="feature", split = False, ax=ax, palette=['peachpuff', 'plum'])
+    sns.violinplot(data = data.sort_values(by = ['true_shape','feature'], ascending = False), x="true_shape", y="value", hue="feature", split = False, ax=ax, palette=['peachpuff', 'plum'])
     ax.set_title('Radius distribution for correct shapes')
     ax.set_ylabel("radius, nm")
     ax.set_xlabel("")
+    #ax.set_ylim([-5,10])
     ax.legend()
 
     ax = axes[0,2]
     data = df_stacked[(df_stacked.feature == 'radius_pd')|(df_stacked.feature == 'pred_radius_pd')]
     data.loc[data.feature == 'radius_pd', 'feature'] = "sampled"
     data.loc[data.feature == 'pred_radius_pd', 'feature'] = "predicted"
-    sns.violinplot(data = data.sort_values(by = 'feature', ascending = False), x="true_shape", y="value", hue="feature", split = False, ax=ax, palette=['peachpuff', 'plum'])
+    sns.violinplot(data = data.sort_values(by = ['true_shape','feature'], ascending = False), x="true_shape", y="value", hue="feature", split = False, ax=ax, palette=['peachpuff', 'plum'])
     ax.set_title('Radius polidispersity distribution\nfor correct shapes')
     ax.legend()
     ax.set_ylabel("radius pd")
     ax.set_xlabel("")
+    #ax.set_ylim([-1,1])
 
     # length
     df_stacked = df.set_index(['true_shape', 'pred_shape']).stack().reset_index().rename(columns = {'level_2':'feature', 0:'value'}).assign(y=1)
@@ -105,9 +109,9 @@ def plot_outcomes_identified(df, data_name):
     ax.set_ylabel("length, nm")
     ax.set_xticks([])
     ax.get_legend().remove()
-    ax.text(-.4, 4.2, "sampled")
-    ax.text(0.2, 4.2, "predicted")
-    #ax.set_ylim([-.5,6])
+    ax.text(-.4, 57, "sampled")
+    ax.text(0.2, 57, "predicted")
+    #ax.set_ylim([-10,50])
 
     ax = axes[1,1]
     data = df_stacked[((df_stacked.feature == 'length_pd')&(df_stacked.true_shape ==2))|((df_stacked.feature == 'pred_length_pd')&(df_stacked.pred_shape == 2))]
@@ -121,7 +125,7 @@ def plot_outcomes_identified(df, data_name):
     ax.get_legend().remove()
     ax.text(-.4, 0.25, "sampled")
     ax.text(0.2, 0.25, "predicted")
-    #ax.set_ylim([-0.05, 0.35])
+    #ax.set_ylim([-1,1])
 
     ax = axes[1,2]
     data = df_stacked[((df_stacked.feature == 'volfraction')&(df_stacked.true_shape ==1))|((df_stacked.feature == 'pred_volfraction')&(df_stacked.pred_shape == 1))]
@@ -133,14 +137,12 @@ def plot_outcomes_identified(df, data_name):
     ax.set_ylabel("volumefraction")
     ax.set_xticks([])
     ax.get_legend().remove()
-    ax.text(-.4, 0.5, "sampled")
-    ax.text(0.2, 0.5, "predicted")
-    #ax.set_ylim([-0.1, 0.7])
+    ax.text(-.4, 0.3, "sampled")
+    ax.text(0.2, 0.3, "predicted")
+    #ax.set_ylim([-0,1])
 
     plt.suptitle('{d} Data'.format(d = data_name))
     
-    plt.savefig("/home/slaskina/resultsML.svg", transparent=True)
-
 
 
 
@@ -164,7 +166,7 @@ def describe_false_shapes(false_spheres, false_hardspheres, false_cylinders):
     false_radii = pd.concat([false_spheres[['value','feature', 'category']],false_hardspheres[['value','feature', 'category']],false_cylinders[['value','feature', 'category']]])
 
     ax1 = plt.subplot(gs[0, 1:3])
-    sns.violinplot(data = false_radii.sort_values(by = 'feature', ascending = True),x = 'category', y="value", hue="feature", split = False, ax=ax1, palette=['peachpuff', 'plum'])
+    sns.violinplot(data = false_radii.sort_values(by = ['category','feature'], ascending = False),x = 'category', y="value", hue="feature", split = False, ax=ax1, palette=['peachpuff', 'plum'])
     ax1.set_title('Radius distribution for undentified shapes')
     ax1.set_ylabel("radius, nm")
     ax1.set_xlabel("")
@@ -186,7 +188,7 @@ def describe_false_shapes(false_spheres, false_hardspheres, false_cylinders):
     false_radii_pd = pd.concat([false_spheres[['value','feature', 'category']],false_hardspheres[['value','feature', 'category']],false_cylinders[['value','feature', 'category']]])
 
     ax2 = plt.subplot(gs[0, 3:5])
-    sns.violinplot(data = false_radii_pd.sort_values(by = 'feature', ascending = True), x="category", y="value", hue="feature", split = False, ax=ax2, palette=['peachpuff', 'plum'])
+    sns.violinplot(data = false_radii_pd.sort_values(by = ['category','feature'], ascending = False), x="category", y="value", hue="feature", split = False, ax=ax2, palette=['peachpuff', 'plum'])
     ax2.set_title('Radius polidispersity distribution\nfor correct shapes')
     ax2.legend()
     ax2.set_ylabel("radius pd")
@@ -199,14 +201,14 @@ def describe_false_shapes(false_spheres, false_hardspheres, false_cylinders):
     false_cylinders['category'] = "cylinders"
 
     ax3 = plt.subplot(gs[1, 0:2])
-    sns.violinplot(data = false_cylinders[['value', 'feature','category']].sort_values(by = 'feature', ascending = True), x="category",y = "value", hue="feature",split = False, ax=ax3, palette=['peachpuff', 'plum'] )
+    sns.violinplot(data = false_cylinders[['value', 'feature','category']].sort_values(by = 'feature', ascending = False), x="category",y = "value", hue="feature",split = False, ax=ax3, palette=['peachpuff', 'plum'] )
     ax3.set_title('Length distribution of cylinder')
     ax3.set_xlabel("cylinder")
     ax3.set_ylabel("length, nm")
     ax3.set_xticks([])
     ax3.get_legend().remove()
-    ax3.text(-.4, 4.2, "FN")
-    ax3.text(0.2, 4.2, "FP")
+    ax3.text(-.3, 25, "FP")
+    ax3.text(0.3, 25, "FN")
     #ax3.set_ylim([-.5,6])
 
     ax4 = plt.subplot(gs[1, 2:4])
@@ -215,14 +217,14 @@ def describe_false_shapes(false_spheres, false_hardspheres, false_cylinders):
     false_cylinders['feature'] = false_cylinders.apply(set_label,args =  (2, "FN", "FP"), axis=1)
     false_cylinders['category'] = "cylinders"
 
-    sns.violinplot(data = false_cylinders[['value', 'feature','category']].sort_values(by = 'feature', ascending = True),  x="category",y = "value", hue="feature", split = False, ax=ax4, palette=['peachpuff', 'plum'])
+    sns.violinplot(data = false_cylinders[['value', 'feature','category']].sort_values(by = 'feature', ascending = False),  x="category",y = "value", hue="feature", split = False, ax=ax4, palette=['peachpuff', 'plum'])
     ax4.set_title('Length polidispersity distribution of cylinder')
     ax4.set_xlabel("cylinder")
     ax4.set_ylabel("length pd")
     ax4.set_xticks([])
     ax4.get_legend().remove()
-    ax4.text(-.4, 0.25, "FN")
-    ax4.text(0.2, 0.25, "FP")
+    ax4.text(-.3, 12.5, "FP")
+    ax4.text(0.3, 12.5, "FN")
     #ax4.set_ylim([-0.05, 0.35])
 
     ax5 = plt.subplot(gs[1, 4:6])
@@ -231,19 +233,20 @@ def describe_false_shapes(false_spheres, false_hardspheres, false_cylinders):
     false_hardspheres['category'] = "hardsphere"
 
 
-    sns.violinplot(data = false_hardspheres[['value', 'feature','category']].sort_values(by = 'feature', ascending = True), x="category",y = "value", hue="feature", split = False, ax=ax5, palette=['peachpuff', 'plum'])
+    sns.violinplot(data = false_hardspheres[['value', 'feature','category']].sort_values(by = 'feature', ascending = False), x="category",y = "value", hue="feature", split = False, ax=ax5, palette=['peachpuff', 'plum'])
     ax5.set_title('Volume fraction distribution of hardsphere')
     ax5.set_xlabel("hardsphere")
-    ax5.set_ylabel("volumefraction")
+    ax5.set_ylabel("volume fraction")
     ax5.set_xticks([])
     ax5.get_legend().remove()
-    ax5.text(-.4, 0.5, "FN")
-    ax5.text(0.2, 0.5, "FP")
+    #ax5.text(-.4, 0.5, "FN")
+    #ax5.text(0.2, 0.5, "FP")
     #ax5.set_ylim([-0.1, 0.7])
 
     plt.suptitle('Parameter distributions for unidentified shapes')
     
     #plt.savefig("/home/slaskina/resultsML.svg", transparent=True)
+
 
 
 def describe_positive_shapes(df_test):
@@ -270,7 +273,7 @@ def describe_positive_shapes(df_test):
     radii = pd.concat([spheres[['value','feature', 'category']],hardspheres[['value','feature', 'category']],cylinders[['value','feature', 'category']]])
     
     ax1 = plt.subplot(gs[0, 1:3])
-    sns.violinplot(data = radii.sort_values(by = 'feature', ascending = False),x = 'category', y="value", hue="feature", split = False, ax=ax1, palette=['peachpuff', 'plum'])
+    sns.violinplot(data = radii.sort_values(by = ['category' ,'feature'], ascending = False),x = 'category', y="value", hue="feature", split = False, ax=ax1, palette=['peachpuff', 'plum'])
     ax1.set_title('Radius distribution for undentified shapes')
     ax1.set_ylabel("radius, nm")
     ax1.set_xlabel("")
@@ -294,7 +297,7 @@ def describe_positive_shapes(df_test):
 
     radii_pd = pd.concat([spheres[['value','feature', 'category']],hardspheres[['value','feature', 'category']],cylinders[['value','feature', 'category']]])
     ax2 = plt.subplot(gs[0, 3:5])
-    sns.violinplot(data = radii_pd.sort_values(by = 'feature', ascending = True), x="category", y="value", hue="feature", split = False, ax=ax2, palette=['peachpuff', 'plum'])
+    sns.violinplot(data = radii_pd.sort_values(by = ['category', 'feature'], ascending = False), x="category", y="value", hue="feature", split = False, ax=ax2, palette=['peachpuff', 'plum'])
     ax2.set_title('Radius polidispersity distribution\nfor correct shapes')
     ax2.legend()
     ax2.set_ylabel("radius pd")
@@ -308,14 +311,14 @@ def describe_positive_shapes(df_test):
     cylinders['category'] = "cylinder"
 
     ax3 = plt.subplot(gs[1, 0:2])
-    sns.violinplot(data = cylinders[['value', 'feature','category']].sort_values(by = 'feature', ascending = True), x="category",y = "value", hue="feature",split = False, ax=ax3, palette=['peachpuff', 'plum'] )
+    sns.violinplot(data = cylinders[['value', 'feature','category']].sort_values(by = 'feature', ascending = False), x="category",y = "value", hue="feature",split = False, ax=ax3, palette=['peachpuff', 'plum'] )
     ax3.set_title('Length distribution of cylinder')
     ax3.set_xlabel("cylinder")
     ax3.set_ylabel("length, nm")
     ax3.set_xticks([])
     ax3.get_legend().remove()
-    ax3.text(-.4, 4.2, "FN")
-    ax3.text(0.2, 4.2, "FP")
+    ax3.text(-.3, 50, "TP")
+    ax3.text(0.3, 50, "FP")
     #ax3.set_ylim([-.5,6])
 
 
@@ -326,14 +329,14 @@ def describe_positive_shapes(df_test):
     cylinders['category'] = "cylinder"
     ax4 = plt.subplot(gs[1,2:4])
 
-    sns.violinplot(data = cylinders[['value', 'feature','category']].sort_values(by = 'feature', ascending = True),  x="category",y = "value", hue="feature", split = False, ax=ax4, palette=['peachpuff', 'plum'])
+    sns.violinplot(data = cylinders[['value', 'feature','category']].sort_values(by = 'feature', ascending = False),  x="category",y = "value", hue="feature", split = False, ax=ax4, palette=['peachpuff', 'plum'])
     ax4.set_title('Length polidispersity distribution of cylinder')
     ax4.set_xlabel("cylinder")
     ax4.set_ylabel("length pd")
     ax4.set_xticks([])
     ax4.get_legend().remove()
-    ax4.text(-.4, 0.25, "FN")
-    ax4.text(0.2, 0.25, "FP")
+    ax4.text(-.3, 11, "TP")
+    ax4.text(0.3, 11, "FP")
     #ax4.set_ylim([-0.05, 0.35])
 
 
@@ -343,14 +346,14 @@ def describe_positive_shapes(df_test):
     hardspheres['category'] = "hardsphere"
 
     ax5 = plt.subplot(gs[1,4:6])
-    sns.violinplot(data = hardspheres[['value', 'feature','category']].sort_values(by = 'feature', ascending = True), x="category",y = "value", hue="feature", split = False, ax=ax5, palette=['peachpuff', 'plum'])
+    sns.violinplot(data = hardspheres[['value', 'feature','category']].sort_values(by = 'feature', ascending = False), x="category",y = "value", hue="feature", split = False, ax=ax5, palette=['peachpuff', 'plum'])
     ax5.set_title('Volume fraction distribution of hardsphere')
     ax5.set_xlabel("hardsphere")
-    ax5.set_ylabel("volumefraction")
+    ax5.set_ylabel("volume fraction")
     ax5.set_xticks([])
     ax5.get_legend().remove()
-    ax5.text(-.4, 0.5, "FN")
-    ax5.text(0.2, 0.5, "FP")
+    #ax5.text(-.4, 0.5, "FN")
+    #ax5.text(0.2, 0.5, "FP")
     #ax5.set_ylim([-0.1, 0.7])
 
     plt.suptitle('Parameter distribution for shapes')
