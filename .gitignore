@@ -1,7 +1,6 @@
 
 dat_files/
 figures/
-FrEIA/
 data.py
 try_NN.ipynb
 mp_api.key
