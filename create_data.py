@@ -8,6 +8,9 @@ import sasmodels.core as core
 import sasmodels.direct_model as direct_model
 import matplotlib.pyplot as plt
 
+
+### Creates training data for a amachine learning application ###
+
 class Hdf:
     """    A class to create a shape's simulations with SasModels and write the metadata and simulation into an HDF file in given folder in desired resolution and in 2D or 1D  """
     def __init__(self,output_id, folder, shape, size, twoD, *args):

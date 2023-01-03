@@ -10,7 +10,7 @@ test_simulations_sas.ipynb
 debugging.ipynb
 .ipynb_checkouts/
 .vscode/
-test_simulations_sas.ipynb
+tests/test_simulations_sas.ipynb
 invertible-resnet/
 
 ## Ignore Visual Studio temporary files, build results, and
