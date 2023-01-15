@@ -200,7 +200,7 @@ def plot_simulation_vs_sas(simulation, uncertainty = 'ISigma'):
         ax.tick_params(labelsize = 15)
         
         cbar = plt.colorbar(im, ax = axs.ravel().tolist(), shrink=0.8, location = 'bottom',orientation='horizontal')
-        cbar.set_label('log FFT', size=16))
+        cbar.set_label('log FFT', size=16)
         cbar.ax.tick_params(labelsize=15)
         plt.suptitle(r'$\chi^2$ error: {error}'.format(error = simulation.Chi_squared_norm(uncertainty) ))
 
