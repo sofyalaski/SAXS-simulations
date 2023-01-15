@@ -6,7 +6,7 @@ import torch
 import time
 import numpy as np
 import pandas as pd
-sys.path.append('/home/slaskina/SAXS-simulations')
+#sys.path.append('/home/slaskina/SAXS-simulations')
 
 from SAXSsimulations import  Sphere, Cylinder, DensityData
 from SAXSsimulations.plotting import *

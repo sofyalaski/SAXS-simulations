@@ -5,7 +5,7 @@ import pyopencl as cl
 import torch
 cl.create_some_context()
 import sys
-sys.path.append('/home/slaskina/SAXS-simulations')
+#sys.path.append('/home/slaskina/SAXS-simulations')
 
 from SAXSsimulations import  Sphere, Cylinder, DensityData
 from SAXSsimulations.plotting import *
