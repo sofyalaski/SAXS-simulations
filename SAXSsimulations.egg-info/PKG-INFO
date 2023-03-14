@@ -1,3 +1,14 @@
 Metadata-Version: 2.1
 Name: SAXSsimulations
-Version: 0.0.0
+Version: 0.0.1
+Summary: Simulate SAXS experiment
+Home-page: https://github.com/sofyalaski/SAXS-simulations
+Author: sofyalaskina
+Author-email: sofyalaskina@gmail.com
+License: MIT
+Classifier: Natural Language :: English
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python :: 3
+Requires-Python: >3.6
+
+file: README.md
