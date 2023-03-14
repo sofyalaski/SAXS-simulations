@@ -175,6 +175,9 @@ class ScatteringProblem():
                     except KeyError:
                         # e.g spheres don't have all of the properties a cylinder does
                         pass
+        with open(self.filename_out.split('.pt')[0]+'_shapes.txt', 'w+', encoding="utf-8") as f:
+            for k in self.shapes_dict.keys():
+                f.write(''.join([k, ' : ', str(self.shapes_dict[k]), '\n']))
         # if the flow of the NN is forward swap the inputs and outputs
         if self.flow == 'forward':
             swap_labels = self.labels
@@ -195,7 +198,7 @@ class ScatteringProblem():
             self.scaler.fit(self.inputs[:,len(self.shapes_dict.keys()):])
             self.inputs_norm = self.scaler.transform(self.inputs[:,len(self.shapes_dict.keys()):])
             self.inputs_norm = torch.concatenate((self.inputs[:,:len(self.shapes_dict.keys())],torch.from_numpy(self.inputs_norm) ), axis=1).type(torch.float32)
-            with open(self.filename_out.split('.pt')[0]+'scaler.txt', 'w+', encoding="utf-8") as f:
+            with open(self.filename_out.split('.pt')[0]+'_scaler.txt', 'w+', encoding="utf-8") as f:
                 f.write('mean values: ')
                 f.write(' '.join([str(i) for i in self.scaler.mean_.flatten()]))
                 f.write('\nstandard deviation values:')
@@ -507,6 +510,17 @@ class ScatteringProblem():
             elif 'true' in c:
                 df[c] = sampled_inputs[:,(i+2*shapes)%2]
         return df
+
+    def predict_latent(self, data_subset):
+        """
+        Look at the latent space variables calculated for the data
+        Arguments:
+            data_subset(list): indices subsetting data
+        """
+        x = self.inputs_norm[data_subset].to(self.device)
+        x = torch.cat((x, self.add_pad_noise * torch.randn(1500, self.ndim_pad_x).to(self.device)), dim=1)
+        out_y, _ = self.model(x, jac  = True)
+        return out_y[:,:2].cpu().detach()
 
 class ScatteringProblemIResNet(ScatteringProblem):
     def __init__(self,  filename_out, 

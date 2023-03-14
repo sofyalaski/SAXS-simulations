@@ -1,0 +1,3 @@
+cylinder : 0
+sphere : 1
+hardsphere : 2

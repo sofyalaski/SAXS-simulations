@@ -20,14 +20,6 @@ from SAXSsimulations.SAXSinverse.utils import ScatteringProblem
 from SAXSsimulations.SAXSinverse.visualizations import plot_outcomes_identified, describe_false_shapes, describe_positive_shapes
 
 
-
-# look at the latent space
-def predict_latent(lp, data_subset,device):
-    x = lp.inputs_norm[data_subset].to(device)
-    x = torch.cat((x, lp.add_pad_noise * torch.randn(1500, lp.ndim_pad_x).to(lp.device)), dim=1)
-    out_y, _ = lp.model(x, jac  = True)
-    return out_y[:,:2].cpu().detach()
-
 def main():
 
     # this parameters work when I/100
@@ -72,7 +64,7 @@ def main():
     #  Losses  #
     ############
 
-    train_reconstruction = True
+    train_reconstruction = False
 
 
     lambd_fit_forw         = 0.01 
@@ -173,20 +165,18 @@ def main():
 
     lp.train()
 
-    df_train = lp.create_table_from_outcomes_test(lp.make_prediction_test(lp.train_indices), lp.train_indices)
-    df_val = lp.create_table_from_outcomes_test(lp.make_prediction_test(lp.val_indices), lp.val_indices) 
     df_test = lp.create_table_from_outcomes_test(lp.make_prediction_test(lp.test_indices), lp.test_indices)
 
 
 
-    bla= predict_latent(lp, lp.test_indices, lp.device)
-    a = pd.DataFrame({'latent space': 0, 'value' : bla[:,0]})
-    b = pd.DataFrame({'latent space': 1, 'value' : bla[:,1]})
+    latent_v= lp.predict_latent(lp.test_indices)
+    a = pd.DataFrame({'latent space': 0, 'value' : latent_v[:,0]})
+    b = pd.DataFrame({'latent space': 1, 'value' : latent_v[:,1]})
     latent = pd.concat((a,b))
     sns.displot(data=latent, x='value', hue = 'latent space', kde=True, height = 4, aspect = 1.6)
     plt.savefig('../results/RNVP_latent.png')
 
-    plot_outcomes_identified(df_test, 'Test', '../results/RNVP_test.png' )
+    plot_outcomes_identified(df_test, 'Test', filename_out.split('.pt')+'_shapes.txt', '../results/RNVP_test.png' )
 
 
 if __name__ == '__main__':

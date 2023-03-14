@@ -3,10 +3,11 @@ import pyopencl as cl
 cl.create_some_context()
 import numpy as np
 import h5py
+import sys
+import os
 import sasmodels
 import sasmodels.core as core
 import sasmodels.direct_model as direct_model
-import matplotlib.pyplot as plt
 
 
 ### Creates training data for the machine learning application ###
@@ -126,18 +127,28 @@ class Hdf:
         self.I_noisy = self.I_sas *noise 
 
 if __name__ == '__main__':
+    simulations_dir = sys.argv[1]
+
+    if not os.path.exists(simulations_dir):
+        os.makedirs(simulations_dir)
+    print('cylinder')
     for i in range(1,5001):
         if i%100==0:
-            print(i/5000*100,'%')
-        Hdf(f'{i:05}', '../data/simulations/','cylinder', 512, False)
+            print(i/5000*100,'%',end = '\r')
+        Hdf(f'{i:05}', simulations_dir,'cylinder', 512, False)
+    print('done')
+    print('sphere')
     for i in range(1,5001):
         if i%100==0:
-            print(i/5000*100,'%')
-        Hdf(f'{5000+i:05}', '../data/simulations/','sphere', 512, False)
+            print(i/5000*100,'%',end = '\r')
+        Hdf(f'{5000+i:05}',simulations_dir,'sphere', 512, False)
+    print('done')
+    print('hard sphere')
     for i in range(1,5001):
         volfraction = np.arange(0,0.31, 0.05)
         if i%100==0:
-            print(i/5000*100,'%')
-        Hdf(f'{10000+i:05}', '../data/simulations/','hardsphere', 512, False, volfraction[i%len(volfraction)])
+            print(i/5000*100,'%',end = '\r')
+        Hdf(f'{10000+i:05}', simulations_dir,'hardsphere', 512, False, volfraction[i%len(volfraction)])
+    print('done')
 
 

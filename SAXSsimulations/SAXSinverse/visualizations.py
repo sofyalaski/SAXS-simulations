@@ -25,9 +25,10 @@ def set_label(row, true_shape, label_true, label_false):
 
 
 
-def plot_outcomes_identified(df, data_name, path):
+
+def plot_outcomes_identified(df, data_name, dict_path, path):
     print('Accuracy is {0:.2%}'.format((df.true_shape == df.pred_shape).sum()/len(df)))
-    fig, axes = plt.subplots(ncols=3, nrows=2, figsize=(16, 8))
+    fig, axes = plt.subplots(ncols=3, nrows=2, figsize=(14, 7))
     fig.subplots_adjust(left=None, bottom=None, right=None, top=None, wspace=0.5, hspace=0.3)
     shapes = ['sphere', 'hardsphere', 'cylinder']
     # shape classified correctly
@@ -70,9 +71,17 @@ def plot_outcomes_identified(df, data_name, path):
         (hMSE = MSE(df[(df.true_shape == 1) & (df.pred_shape == 1)].true_volfraction, df[(df.true_shape == 1) & (df.pred_shape == 1)].pred_volfraction)))
     #stacked df to create violinplots
     df_stacked = df[df.true_shape ==df.pred_shape].drop(columns = ['pred_shape']).set_index('true_shape').stack().reset_index().rename(columns = {'level_1':'feature', 0:'value'})
-    df_stacked.loc[df_stacked.true_shape == 0, 'true_shape'] = "sphere"
-    df_stacked.loc[df_stacked.true_shape == 1, 'true_shape'] = "hardsphere"
-    df_stacked.loc[df_stacked.true_shape == 2, 'true_shape'] = "cylinder"
+
+    with open(dict_path, 'r') as f:
+        text = f.read().split('\n')[:-1]
+
+    shapes_dict = {}
+    for i in text:
+        shapes_dict[int(i.split(' : ')[1])] = i.split(' : ')[0]
+
+    df_stacked.loc[df_stacked.true_shape == 0, 'true_shape'] = shapes_dict[0]
+    df_stacked.loc[df_stacked.true_shape == 1, 'true_shape'] = shapes_dict[1]
+    df_stacked.loc[df_stacked.true_shape == 2, 'true_shape'] = shapes_dict[2]
 
     ax = axes[0,1]
     data = df_stacked[(df_stacked.feature == 'true_radius')|(df_stacked.feature == 'pred_radius')]
@@ -109,8 +118,8 @@ def plot_outcomes_identified(df, data_name, path):
     ax.set_ylabel("length, nm")
     ax.set_xticks([])
     ax.get_legend().remove()
-    ax.text(-.4, 57, "sampled")
-    ax.text(0.2, 57, "predicted")
+    #ax.text(-.4, 57, "sampled")
+    #ax.text(0.2, 57, "predicted")
     #ax.set_ylim([-10,50])
 
     ax = axes[1,1]
@@ -123,8 +132,8 @@ def plot_outcomes_identified(df, data_name, path):
     ax.set_ylabel("length pd")
     ax.set_xticks([])
     ax.get_legend().remove()
-    ax.text(-.4, 0.25, "sampled")
-    ax.text(0.2, 0.25, "predicted")
+    #ax.text(-.4, 0.25, "sampled")
+    #ax.text(0.2, 0.25, "predicted")
     #ax.set_ylim([-1,1])
 
     ax = axes[1,2]
@@ -137,8 +146,8 @@ def plot_outcomes_identified(df, data_name, path):
     ax.set_ylabel("volumefraction")
     ax.set_xticks([])
     ax.get_legend().remove()
-    ax.text(-.4, 0.3, "sampled")
-    ax.text(0.2, 0.3, "predicted")
+    #ax.text(-.4, 0.3, "sampled")
+    #ax.text(0.2, 0.3, "predicted")
     #ax.set_ylim([-0,1])
 
     plt.suptitle('{d} Data'.format(d = data_name))
