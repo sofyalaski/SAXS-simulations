@@ -486,9 +486,9 @@ class ScatteringProblem():
         df['pred_radius'] = np.take_along_axis(pred[:,shapes:2*shapes],df.pred_shape.values.reshape(-1,1), axis=1)
         for i,c in enumerate(df.columns[4:]):
             if 'pred' in c:
-                df[c] = pred[:,(i+2*shapes)%2]
+                df[c] = pred[:,i//2+2*shapes]
             elif 'true' in c:
-                df[c] = sampled_inputs[:,(i+2*shapes)%2]
+                df[c] = sampled_inputs[:,i//2+2*shapes]
         return df
     
     
@@ -506,9 +506,9 @@ class ScatteringProblem():
         df['pred_radius'] = np.take_along_axis(pred[:,shapes:2*shapes],df.pred_shape.values.reshape(-1,1), axis=1)
         for i,c in enumerate(df.columns[4:]):
             if 'pred' in c:
-                df[c] = pred[:,(i+2*shapes)%2]
+                df[c] = pred[:,i//2+2*shapes]
             elif 'true' in c:
-                df[c] = sampled_inputs[:,(i+2*shapes)%2]
+                df[c] = sampled_inputs[:,i//2+2*shapes]
         return df
 
     def predict_latent(self, data_subset):
