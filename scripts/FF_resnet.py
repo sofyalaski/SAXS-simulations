@@ -180,7 +180,7 @@ def main():
 
 
 
-    plot_outcomes_identified(df_test, 'Test', filename_out.split('.pt')+'_shapes.txt', '../results/ff_test.png' )
+    plot_outcomes_identified(df_test, 'Test', filename_out.split('.pt')[0]+'_shapes.txt', '../results/ff_test.png' )
 
 
 if __name__ == '__main__':

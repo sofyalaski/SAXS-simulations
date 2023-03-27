@@ -176,7 +176,7 @@ def main():
     sns.displot(data=latent, x='value', hue = 'latent space', kde=True, height = 4, aspect = 1.6)
     plt.savefig('../results/RNVP_latent.png')
 
-    plot_outcomes_identified(df_test, 'Test', filename_out.split('.pt')+'_shapes.txt', '../results/RNVP_test.png' )
+    plot_outcomes_identified(df_test, 'Test', filename_out.split('.pt')[0]+'_shapes.txt', '../results/RNVP_test.png' )
 
 
 if __name__ == '__main__':
