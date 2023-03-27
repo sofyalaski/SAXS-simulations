@@ -486,12 +486,11 @@ class Simulation(DensityData):
             return binned_data[['Q', 'I', 'IStd', 'ISEM', 'IError', 'ISigma', 'QStd', 'QSEM', 'QSigma','qy', 'qy_sem', 'qz', 'qz_sem']]
 
 
-    def __reBin_sphere(self, nbins, IEMin, QEMin,for_sas):
+    def __reBin_sphere(self,  IEMin, QEMin,for_sas):
         """
         For a sphere we consider a 1D rebinned curve. This function masks the relevant pixels (a sphere for a 3D instance and circle for a 2D)
         to rebin with the general rebinning function.
         Arguments: 
-            nbins (int): how many bins should there be in a new data
             IEMin (float): coefficent used to determine ISigma
             QEMin (float): coefficent used to determine QSigma
             for_sas (bool): when True the central slice is only used for rebinning
@@ -520,7 +519,7 @@ class Simulation(DensityData):
         qMax = float(Q_masked_no_nan.max())
 
         # prepare bin edges:
-        self.binEdges = np.logspace(np.log10(qMin ), np.log10(qMax), num=nbins + 1)
+        self.binEdges = np.logspace(np.log10(qMin ), np.log10(qMax), num=self.nBins + 1)
 
         # add a little to the end to ensure the last datapoint is captured:
         self.binEdges[-1] = self.binEdges[-1] + 1e-3 * (self.binEdges[-1] - self.binEdges[-2])
@@ -534,9 +533,9 @@ class Simulation(DensityData):
         else:
             # accumulate bins of slices in a new Data Frame
             binned_slices = pd.DataFrame()
-            for nSlice in range(self.FTI_sinc.shape[0]):
-                Q = self.__Q_at_slice(n_slice)                    
-                I = self.FTI_sinc[nSlice,:,:][~self.FTI_sinc[nSlice,:,:].isnan()]
+            for n_slice in range(self.FTI_sinc.shape[0]):
+                Q = self.__Q_at_slice(n_slice).flatten()                    
+                I = self.FTI_sinc[n_slice,:,:][~self.FTI_sinc[n_slice,:,:].isnan()]
                 df = pd.DataFrame({'Q':Q, 
                                 'I':I,
                                 'ISigma':0.01 * I})
@@ -559,12 +558,11 @@ class Simulation(DensityData):
             self.binned_data['QSigma'] = self.binned_data.apply(lambda x: self.__determine_QSigma(x, QEMin), axis = 1) 
             self.binned_data.dropna(thresh=4, inplace=True) # empty rows appear because of groupping by index in accumulated data, which in turn consisted of self.binEdges, which are sometimes empty
 
-    def __reBin_cylinder(self, nbins, IEMin, QEMin):
+    def __reBin_cylinder(self, IEMin, QEMin):
         """
         In the cylinder the final output is the 2D scattering pattern, because otherwise the angular data is lost. 
-        Only option to rebin the central slice exists. 
+        Only option to rebin the central slice exists.  Data will be rebinned into [nbins x nbins] matrix 
         Arguments: 
-            nbins (int): data will be rebinned into [nbins x nbins] matrix 
             IEMin (float): coefficent used to determine ISigma
             QEMin (float): coefficent used to determine QSigma
         """
@@ -575,7 +573,7 @@ class Simulation(DensityData):
         qMax = float(self.qx.max())
 
         # prepare bin edges:
-        self.binEdges = np.linspace(qMin, qMax, num=nbins + 1)
+        self.binEdges = np.linspace(qMin, qMax, num=self.nBins + 1)
         self.binEdges[-1] = self.binEdges[-1] + 1e-3 * (self.binEdges[-1] - self.binEdges[-2])
                 
         df = pd.DataFrame({'Q':Q_central_slice.flatten(), 
@@ -601,9 +599,9 @@ class Simulation(DensityData):
         """
         self.nBins = nbins
         if self.shape == 'sphere':
-            self.__reBin_sphere(nbins, IEMin, QEMin,  for_sas)
+            self.__reBin_sphere( IEMin, QEMin,  for_sas)
         elif self.shape == 'cylinder':
-            self.__reBin_cylinder(nbins, IEMin, QEMin)
+            self.__reBin_cylinder( IEMin, QEMin)
 
 
 
