@@ -371,7 +371,7 @@ class ScatteringProblem():
                 y = torch.cat((self.add_pad_noise * self.noise_batch(self.ndim_pad_zy), y), dim=1)
             y = torch.cat((self.noise_batch(self.ndim_z), y), dim=1)
 
-            out_y, out_y_jac = self.model(x, jac        = True)
+            out_y, out_y_jac = self.model(x, jac = True)
 
             batch_losses.extend(self.loss_forward_mmd(out_y, y))
             batch_losses.append(self.loss_backward_mmd(x, y))
@@ -386,14 +386,14 @@ class ScatteringProblem():
                 self.optim_step()
 
         if test:
-            monitoring.show_hist(out_y[:, :self.ndim_z])
-            monitoring.show_cov(out_y[:, :self.ndim_z])
+            #monitoring.show_hist(out_y[:, :self.ndim_z])
+            #monitoring.show_cov(out_y[:, :self.ndim_z])
             nograd.__exit__(None, None, None)
         return np.mean(loss_history, axis=0)
 
     def train(self):
         if self.flow == 'inverse':
-            monitoring.restart()
+            monitoring.restart(self.train_reconstruction)
 
         try:
             t_start = time()
@@ -518,7 +518,7 @@ class ScatteringProblem():
             data_subset(list): indices subsetting data
         """
         x = self.inputs_norm[data_subset].to(self.device)
-        x = torch.cat((x, self.add_pad_noise * torch.randn(1500, self.ndim_pad_x).to(self.device)), dim=1)
+        x = torch.cat((x, self.add_pad_noise * torch.randn(len(data_subset), self.ndim_pad_x).to(self.device)), dim=1)
         out_y, _ = self.model(x, jac  = True)
         return out_y[:,:2].cpu().detach()
 
@@ -625,9 +625,9 @@ class ScatteringProblemIResNet(ScatteringProblem):
                 l_total.backward()
                 self.optim_step()
 
-        if test:
-            monitoring.show_hist(out_y[:, :self.ndim_z])
-            monitoring.show_cov(out_y[:, :self.ndim_z])
+        #if test:
+        #    monitoring.show_hist(out_y[:, :self.ndim_z])
+        #    monitoring.show_cov(out_y[:, :self.ndim_z])
         return np.mean(loss_history, axis=0)
 
 

@@ -28,42 +28,24 @@ class Visualizer:
         print(line)
         self.counter += 1
 
-    def update_images(self, *args):
-        pass
 
-    def update_hist(self, *args):
-        pass
 
 
 visualizer = None
 
-def restart():
+def restart(loss_reconstruction):
     global visualizer
     loss_labels = []
 
     #loss_labels.append('L_ML')
     loss_labels += ['L_fit', 'L_mmd_fwd']
     loss_labels.append('L_mmd_back')
-    loss_labels.append('L_reconst')
+    if loss_reconstruction:
+        loss_labels.append('L_reconst')
 
     loss_labels += [l + '(test)' for l in loss_labels]
 
-    #visualizer = LiveVisualizer(loss_labels)
     visualizer = Visualizer(loss_labels)
 
 def show_loss(losses, logscale=True):
     visualizer.update_losses(losses, logscale)
-
-def show_imgs(*imgs):
-    visualizer.update_images(*imgs)
-
-def show_hist(data):
-    visualizer.update_hist(data.data.cpu())
-
-def show_cov(data):
-    #visualizer.update_cov(data.data.cpu())
-    pass
-
-def close():
-    visualizer.close()
-
